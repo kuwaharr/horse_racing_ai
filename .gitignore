@@ -1,0 +1,17 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# data
+data/
+*.db
+*.json
+*.parquet
+
+# OS / editor
+.DS_Store
+.vscode/
+
+# archives
+archive/
