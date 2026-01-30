@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import requests
 from bs4 import BeautifulSoup
 
@@ -36,7 +34,7 @@ def fetch_odds_jsonp(race_id: str, odds_type: int, compress=0) -> Result[str]:
         "&sort=odds"
         f"&compress={compress}"
     )
-    try: 
+    try:
         resp = requests.get(url, headers=headers)
         return Result(success=True, value=resp.text)
 

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import pandas as pd
 
 from ..common.config import DB_PATH

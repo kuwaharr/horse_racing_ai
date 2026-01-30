@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import json
 import re
 
@@ -221,7 +219,7 @@ def extract_runners(soup: BeautifulSoup) -> Result[list[dict]]:
 
         horse_weight = cells[idx("馬体重(増減)")]
         row["horse_weight"] = horse_weight if len(horse_weight) > 0 else None
-        
+
         horse_id = None
         horse_info_tag = tr.find("td", class_="Horse_Info")
         if (

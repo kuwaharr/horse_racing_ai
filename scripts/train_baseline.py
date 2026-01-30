@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import pandas as pd
 from sklearn.model_selection import GroupShuffleSplit
 from sklearn.linear_model import LogisticRegression

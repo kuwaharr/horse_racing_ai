@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import pandas as pd
 
 from src.common.config import FEAT_DIR
