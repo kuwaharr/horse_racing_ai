@@ -15,7 +15,7 @@ from src.common.db import (
     upsert_wide,
     upsert_trio,
 )
-from src.preprocess.load import load_json
+from src.preprocess.load_json import load_json
 from src.preprocess.normalize import (
     normalize_race,
     normalize_runners,
