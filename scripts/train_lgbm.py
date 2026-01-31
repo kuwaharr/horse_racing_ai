@@ -3,7 +3,7 @@ import pandas as pd
 from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import GroupShuffleSplit
 
-from src.common.config import FEAT_DIR, DATA_ROOT
+from src.data.data_path import FEAT_DIR, DATA_ROOT
 
 
 def main():

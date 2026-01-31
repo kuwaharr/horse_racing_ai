@@ -1,25 +1,18 @@
 import pandas as pd
 
-
-def make_place_y(finish: int, race_size: int) -> int:
-    if race_size <= 7:
-        return int(finish <= 2)
-    elif race_size >= 8:
-        return int(finish <= 3)
+from src.data.data_path import FEAT_DIR
+from src.feature.load_db import load_train_df
 
 
 def main():
-    from src.common.config import FEAT_DIR
-    from src.feature.load_db import load_predict_df
-
-    df = load_predict_df()
+    df = load_train_df()
 
     df = df[df["finish"].notna() & df["race_size"].notna()].copy()
     df["finish"] = df["finish"].astype(int)
     df["race_size"] = df["race_size"].astype(int)
 
     y = df.apply(
-        lambda r: make_place_y(r["finish"], r["race_size"]),
+        lambda r: is_place(r["finish"], r["race_size"]),
         axis=1
     ).astype(int)
 

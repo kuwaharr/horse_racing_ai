@@ -1,11 +1,11 @@
 import pandas as pd
 
-from src.common.config import FEAT_DIR
-from src.feature.load_db import load_predict_df
+from src.data.data_path import FEAT_DIR
+from src.feature.load_db import load_train_df
 
 
 def main():
-    df = load_predict_df()
+    df = load_train_df()
     print(df.head(10))
 
     df = df[df["finish"].notna()].copy()

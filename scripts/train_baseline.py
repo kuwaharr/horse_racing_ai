@@ -3,7 +3,7 @@ from sklearn.model_selection import GroupShuffleSplit
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_auc_score
 
-from src.common.config import FEAT_DIR
+from src.data.data_path import FEAT_DIR
 
 
 def main():

@@ -1,6 +1,6 @@
 import json
 
-from ..common.config import RAW_DIR
+from ..data.data_path import RAW_DIR
 
 
 def combine_race_dict(race_info: dict, race_meta: dict) -> dict:

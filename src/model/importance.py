@@ -1,11 +1,10 @@
+from pathlib import Path
+
 import lightgbm as lgb
 import pandas as pd
 
-from src.common.config import DATA_ROOT
 
-
-def main():
-    model_path = DATA_ROOT / "model" / "lgbm_place_rule.txt"
+def show_importance(model_path: Path) -> None:
     model = lgb.Booster(model_file=model_path)
 
     imp = pd.DataFrame({
@@ -16,7 +15,3 @@ def main():
     imp = imp.sort_values("importance", ascending=False)
 
     print(imp.head(30))
-
-
-if __name__ == "__main__":
-    main()

@@ -1,14 +1,7 @@
 import pandas as pd
 
-from src.common.config import DB_PATH, FEAT_DIR
-from src.common.db import connect
-
-
-def is_place(finish: int, race_size: int) -> int:
-    if race_size <= 7:
-        return int(finish <= 2)
-    if race_size >= 8:
-        return int(finish <= 3)
+from src.data.data_path import DB_PATH, FEAT_DIR
+from src.data.db import connect
 
 
 def main():
