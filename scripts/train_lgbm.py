@@ -7,7 +7,7 @@ from src.common.config import FEAT_DIR, DATA_ROOT
 
 
 def main():
-    x_path = FEAT_DIR / "x.parquet"
+    x_path = FEAT_DIR / "x_plus_hist.parquet"
     y_path = FEAT_DIR / "y_place_rule.parquet"
     meta_path = FEAT_DIR / "meta.parquet"
 
