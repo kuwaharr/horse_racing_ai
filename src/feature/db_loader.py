@@ -1,7 +1,7 @@
 import pandas as pd
 
-from ..data.data_path import DB_PATH
-from ..data.db import connect
+from ..data.paths import DB_PATH
+from ..data.database import connect
 
 
 def load_train_df() -> pd.DataFrame:

@@ -13,16 +13,16 @@ from src.common.db import (
     upsert_wide,
     upsert_trio,
 )
-from src.preprocess.load_json import load_json
-from src.preprocess.normalize import (
+from src.preprocess.json_loader import load_json
+from src.preprocess.normalizers import (
     normalize_race,
     normalize_runners,
     normalize_place,
     normalize_wide,
     normalize_trio,
 )
-from src.scrape.export import combine_race_dict, export_json
-from src.scrape.extract import (
+from src.scrape.json_exporter import combine_race_dict, export_json
+from src.scrape.extracters import (
     extract_runners,
     extract_race_meta,
     parse_jsonp,
@@ -32,7 +32,7 @@ from src.scrape.extract import (
     parse_trio,
     extract_race_ids,
 )
-from src.scrape.fetch import fetch_odds_jsonp, make_race_url, make_soup
+from src.scrape.fetchers import fetch_odds_jsonp, make_race_url, make_soup
 
 
 def increment_page(url: str) -> str:

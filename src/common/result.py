@@ -4,6 +4,7 @@ from typing import Generic, Optional, TypeVar
 
 T = TypeVar("T")
 
+
 @dataclass
 class Result(Generic[T]):
     success: bool
