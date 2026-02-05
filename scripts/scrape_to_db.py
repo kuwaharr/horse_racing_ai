@@ -1,38 +1,37 @@
 import argparse
 import time
-from pathlib import Path
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
-from src.common.config import DB_PATH, RAW_DIR
-from src.common.db import (
+from src.data.database import (
     connect,
     get_race_ids_in_db,
+    upsert_place,
     upsert_race,
     upsert_runner,
-    upsert_place,
-    upsert_wide,
     upsert_trio,
+    upsert_wide,
 )
+from src.data.paths import DB_PATH, RAW_DIR
 from src.preprocess.json_loader import load_json
 from src.preprocess.normalizers import (
+    normalize_place,
     normalize_race,
     normalize_runners,
-    normalize_place,
-    normalize_wide,
     normalize_trio,
+    normalize_wide,
 )
-from src.scrape.json_exporter import combine_race_dict, export_json
 from src.scrape.extracters import (
-    extract_runners,
-    extract_race_meta,
-    parse_jsonp,
-    parse_url,
-    parse_place,
-    parse_wide,
-    parse_trio,
     extract_race_ids,
+    extract_race_meta,
+    extract_runners,
+    parse_jsonp,
+    parse_place,
+    parse_trio,
+    parse_url,
+    parse_wide,
 )
 from src.scrape.fetchers import fetch_odds_jsonp, make_race_url, make_soup
+from src.scrape.json_exporter import combine_race_dict, export_json
 
 
 def increment_page(url: str) -> str:

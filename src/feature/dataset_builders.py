@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 
 
@@ -5,6 +6,13 @@ def is_place(finish: int, race_size: int) -> int:
     if race_size <= 7:
         return int(finish <= 2)
     return int(finish <= 3)
+
+
+def calc_odds_mid(odds_min, odds_max) -> float:
+    if pd.isna(odds_min) and pd.isna(odds_max):
+        return np.nan
+    return float((odds_min + odds_max) / 2.0)
+
 
 
 def add_is_place_column(df: pd.DataFrame) -> pd.DataFrame:
@@ -74,7 +82,8 @@ def add_horse_finish_last3_best_column(df: pd.DataFrame) -> pd.DataFrame:
         df.groupby("horse_id")["finish"]
         .apply(lambda s: s.shift(1).rolling(3, min_periods=1).min())
         .reset_index(level=0, drop=True)
-    ).astype(int)
+    )
+    return df
 
 
 def add_horse_place_last3_mean_column(df: pd.DataFrame) -> pd.DataFrame:
@@ -141,5 +150,10 @@ def add_onehot_columns(df: pd.DataFrame) -> pd.DataFrame:
     # encode columns where its name ends with _id
     cat_cols = [c for c in df.columns if c.endswith("_id")]
 
-    df = pd.get_dummies(df, columns=cat_cols, dummy_na=True)
+    df = pd.get_dummies(
+        df,
+        columns=cat_cols,
+        dummy_na=True,
+        dtype="int8",
+    )
     return df
