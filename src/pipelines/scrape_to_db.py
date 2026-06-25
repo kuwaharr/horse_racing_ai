@@ -55,7 +55,7 @@ def check_race_ids_in_db() -> int:
     return n
 
 
-def sleep_backoff(min_sec: float = 2.0, max_sec: float = 5.0) -> None:
+def sleep_backoff(min_sec: float = 5.0, max_sec: float = 10.0) -> None:
     time.sleep(random.uniform(min_sec, max_sec))
 
 
@@ -205,7 +205,7 @@ def run(race_list_url: str, mode: str = "manual", limit: int | None = None) -> N
 
             logger.info("Normalizing/Upserting done")
 
-            time.sleep(random.uniform(1.0, 1.5))
+            time.sleep(random.uniform(3.0, 5.0))
 
         logger.info("page=%s Done", current_page)
 
