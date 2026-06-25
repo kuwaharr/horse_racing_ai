@@ -17,17 +17,14 @@
 - レース一覧ページから`race_id`を抽出
 - 各レースの結果ページからレース情報と出走馬情報を取得
 - 複勝、ワイド、3連複のオッズをJSONP APIから取得
-- 取得データを`data/raw/<race_id>.json`へ保存
-- 正規化したデータをSQLiteの`data/hr.db`へUPSERT
+- 取得データを外部SSDの`D:\horse_racing_ai\data\raw\<race_id>.json`へ保存
+- 正規化したデータをSQLiteの`D:\horse_racing_ai\data\hr.db`へUPSERT
 - ログを`logs/scrape_to_db.log`へ出力
 
 ## ディレクトリ構成
 
 ```text
 horse_racing_ai/
-  data/
-    hr.db
-    raw/
   logs/
   scripts/
     scrape_to_db.py
@@ -38,6 +35,12 @@ horse_racing_ai/
     preprocess/
     scrape/
   schema.sql
+
+D:\horse_racing_ai\data\
+  hr.db
+  raw/
+  feature/
+  model/
 ```
 
 ## データベース
@@ -77,9 +80,19 @@ pip install requests beautifulsoup4 lxml
 
 DBを初期化する場合:
 
-```bash
-sqlite3 data/hr.db < schema.sql
+Windows:
+
+```powershell
+sqlite3 D:\horse_racing_ai\data\hr.db ".read schema.sql"
 ```
+
+WSL:
+
+```bash
+sqlite3 /mnt/d/horse_racing_ai/data/hr.db < schema.sql
+```
+
+データ保存先を変更したい場合は、環境変数`HORSE_RACING_DATA_ROOT`で上書きできます。
 
 ## 使い方
 
@@ -104,6 +117,7 @@ python scripts/scrape_to_db.py --url "<netkeibaのレース一覧URL>" --limit 1
 ## 実装メモ
 
 - パス定義は`src/data/paths.py`にあります
+- データ保存先のデフォルトはWindowsでは`D:\horse_racing_ai\data`、WSL/Linuxでは`/mnt/d/horse_racing_ai/data`です
 - スクレイピング処理は`src/scrape/`配下に分かれています
 - 正規化処理は`src/preprocess/normalizers.py`に集約されています
 - SQLiteへの投入処理は`src/data/database.py`にあります

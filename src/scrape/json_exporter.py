@@ -30,6 +30,7 @@ def export_json(race: dict, runners: list, odds: list) -> None:
     }
 
     data_path = RAW_DIR / f"{data['race']['race_id']}.json"
+    data_path.parent.mkdir(parents=True, exist_ok=True)
 
     with open(data_path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
