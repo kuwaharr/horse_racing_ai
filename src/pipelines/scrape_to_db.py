@@ -55,7 +55,11 @@ def check_race_ids_in_db() -> int:
     return n
 
 
-def sleep_backoff(min_sec: float = 5.0, max_sec: float = 10.0) -> None:
+def sleep_between_requests(min_sec: float = 3.0, max_sec: float = 6.0) -> None:
+    time.sleep(random.uniform(min_sec, max_sec))
+
+
+def sleep_backoff(min_sec: float = 30.0, max_sec: float = 60.0) -> None:
     time.sleep(random.uniform(min_sec, max_sec))
 
 
@@ -78,6 +82,7 @@ def run(race_list_url: str, mode: str = "manual", limit: int | None = None) -> N
 
     while True:
         r_soup = make_soup(race_list_url)
+        sleep_between_requests()
         if not r_soup.success:
             logger.error("make_soup failed %s", r_soup.error)
             sleep_backoff()
@@ -99,6 +104,7 @@ def run(race_list_url: str, mode: str = "manual", limit: int | None = None) -> N
             race_url = make_race_url(race_id)
 
             r_soup = make_soup(race_url)
+            sleep_between_requests()
             if not r_soup.success:
                 logger.error("make_soup failed %s", r_soup.error)
                 sleep_backoff()
@@ -129,6 +135,7 @@ def run(race_list_url: str, mode: str = "manual", limit: int | None = None) -> N
             for name, odds_type, parser in odds_kinds:
                 odds[name] = None
                 r_jsonp = fetch_odds_jsonp(race_id, odds_type, compress=0)
+                sleep_between_requests()
                 if not r_jsonp.success:
                     logger.warning("kind=%s fetch_odds_jsonp failed %s", name, r_jsonp.error)
                     sleep_backoff()
@@ -204,8 +211,6 @@ def run(race_list_url: str, mode: str = "manual", limit: int | None = None) -> N
                 conn.commit()
 
             logger.info("Normalizing/Upserting done")
-
-            time.sleep(random.uniform(3.0, 5.0))
 
         logger.info("page=%s Done", current_page)
 
