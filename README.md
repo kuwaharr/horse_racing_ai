@@ -121,7 +121,8 @@ python scripts/scrape_to_db.py --url "<netkeibaのレース一覧URL>" --limit 1
 - スクレイピング処理は`src/scrape/`配下に分かれています
 - 正規化処理は`src/preprocess/normalizers.py`に集約されています
 - SQLiteへの投入処理は`src/data/database.py`にあります
-- `src/pipelines/scrape_to_db.py`は現時点では空で、実行入口は`scripts/scrape_to_db.py`です
+- `src/pipelines/scrape_to_db.py`にスクレイピングからDB投入までの処理本体があります
+- `scripts/scrape_to_db.py`はCLI用の薄い入口です
 
 ## 今後の予定
 
