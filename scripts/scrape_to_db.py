@@ -1,7 +1,9 @@
 import argparse
+import random
 import time
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
+from src.common.logger import get_logger
 from src.data.database import (
     connect,
     get_race_ids_in_db,
@@ -33,6 +35,8 @@ from src.scrape.extracters import (
 from src.scrape.fetchers import fetch_odds_jsonp, make_race_url, make_soup
 from src.scrape.json_exporter import combine_race_dict, export_json
 
+logger = get_logger("scripts.scrape_to_db")
+
 
 def increment_page(url: str) -> str:
     p = urlparse(url)
@@ -47,8 +51,12 @@ def increment_page(url: str) -> str:
 def check_race_ids_in_db() -> int:
     race_ids_in_db = get_race_ids_in_db(DB_PATH)
     n = len(race_ids_in_db)
-    print(f"[INFO] Found {n} race_ids in DB")
+    logger.info("Found %s race_ids in DB", n)
     return n
+
+
+def sleep_backoff(min_sec: float = 2.0, max_sec: float = 5.0) -> None:
+    time.sleep(random.uniform(min_sec, max_sec))
 
 
 def main():
@@ -86,13 +94,14 @@ def main():
     n_race_ids_in_db = check_race_ids_in_db()
     if limit is not None:
         if n_race_ids_in_db >= limit:
-            print("[INFO] Found more race_ids in DB than limit")
+            logger.info("Found more race_ids in DB than limit")
             return
 
     while True:
         r_soup = make_soup(race_list_url)
         if not r_soup.success:
-            print(f"[ERROR] make_soup failed\n{r_soup.error}")
+            logger.error("make_soup failed %s", r_soup.error)
+            sleep_backoff()
             return
         soup = r_soup.value
 
@@ -100,31 +109,32 @@ def main():
 
         n_race_ids = len(race_ids)
         if n_race_ids == 0:
-            print("[INFO] Scraped all pages")
+            logger.info("Scraped all pages")
             return
 
-        print(f"[INFO][page={current_page}] Found {n_race_ids} race_ids in race list page")
+        logger.info("page=%s Found %s race_ids in race list page", current_page, n_race_ids)
 
         for i, race_id in enumerate(race_ids, start=1):
-            print(f"[INFO][{i}/{n_race_ids}][race_id={race_id}] Processing...")
+            logger.info("%s/%s race_id=%s Processing", i, n_race_ids, race_id)
 
             race_url = make_race_url(race_id)
 
             r_soup = make_soup(race_url)
             if not r_soup.success:
-                print(f"[ERROR] make_soup failed\n{r_soup.error}")
+                logger.error("make_soup failed %s", r_soup.error)
+                sleep_backoff()
                 continue
             soup = r_soup.value
 
             r_race_info = parse_url(race_url)
             if not r_race_info.success:
-                print(f"[ERROR] parse_url failed\n{r_race_info.error}")
+                logger.error("parse_url failed %s", r_race_info.error)
                 continue
             race_info = r_race_info.value
 
             r_race_meta = extract_race_meta(soup)
             if not r_race_meta.success:
-                print(f"[ERROR] exctract_race_meta failed\n{r_race_meta.error}")
+                logger.error("extract_race_meta failed %s", r_race_meta.error)
                 continue
             race_meta = r_race_meta.value
 
@@ -132,7 +142,7 @@ def main():
 
             r_runners = extract_runners(soup)
             if not r_runners.success:
-                print(f"[ERROR] extract_runners failed\n{r_runners.error}")
+                logger.error("extract_runners failed %s", r_runners.error)
                 continue
             runners = r_runners.value
 
@@ -141,13 +151,15 @@ def main():
                 odds[name] = None
                 r_jsonp = fetch_odds_jsonp(race_id, odds_type, compress=0)
                 if not r_jsonp.success:
-                    print(f"[WARN][kind={name}] fetch_odds_jsonp failed\n{r_jsonp.error}")
+                    logger.warning("kind=%s fetch_odds_jsonp failed %s", name, r_jsonp.error)
+                    sleep_backoff()
                     continue
                 jsonp = r_jsonp.value
 
                 r_odds_block = parse_jsonp(jsonp, odds_type)
                 if not r_odds_block.success:
-                    print(f"[WARN][kind={name}] parse_jsonp failed\n{r_odds_block.error}")
+                    logger.warning("kind=%s parse_jsonp failed %s", name, r_odds_block.error)
+                    sleep_backoff()
                     continue
                 odds_block = r_odds_block.value
 
@@ -155,57 +167,68 @@ def main():
 
             export_json(race, runners, odds)
 
-            print("[INFO] Scraping/Exporting done")
+            logger.info("Scraping/Exporting done")
 
             raw_data_file = RAW_DIR / f"{race_id}.json"
 
             raw_data = load_json(raw_data_file)
 
-            conn = connect(DB_PATH)
-            cur = conn.cursor()
+            with connect(DB_PATH) as conn:
+                cur = conn.cursor()
 
-            r_normalized_race = normalize_race(raw_data["race"])
-            if r_normalized_race.success:
-                upsert_race(cur, r_normalized_race.value)
-            else:
-                raise RuntimeError(f"normalize_race failed:\n{r_normalized_race.error}")
+                failed = False
 
-            r_normalized_runners = normalize_runners(race_id, raw_data["runners"])
-            if r_normalized_runners.success:
-                for runner in r_normalized_runners.value:
-                    upsert_runner(cur, runner)
-            else:
-                raise RuntimeError(f"normalize_runners failed:\n{r_normalized_runners.error}")
+                r_normalized_race = normalize_race(raw_data["race"])
+                if r_normalized_race.success:
+                    upsert_race(cur, r_normalized_race.value)
+                else:
+                    logger.error("race_id=%s normalize_race failed %s", race_id, r_normalized_race.error)
+                    failed = True
 
-            r_normalized_place = normalize_place(race_id, raw_data["odds"]["place"])
-            if r_normalized_place.success:
-                for odds in r_normalized_place.value:
-                    upsert_place(cur, odds)
-            else:
-                raise RuntimeError(f"normalize_place failed:\n{r_normalized_place.error}")
+                r_normalized_runners = normalize_runners(race_id, raw_data["runners"])
+                if r_normalized_runners.success:
+                    for runner in r_normalized_runners.value:
+                        upsert_runner(cur, runner)
+                else:
+                    logger.error("race_id=%s normalize_runners failed %s", race_id, r_normalized_runners.error)
+                    failed = True
 
-            r_normalized_wide = normalize_wide(race_id, raw_data["odds"]["wide"])
-            if r_normalized_wide.success:
-                for odds in r_normalized_wide.value:
-                    upsert_wide(cur, odds)
-            else:
-                raise RuntimeError(f"normalize_wide failed:\n{r_normalized_wide.error}")
+                r_normalized_place = normalize_place(race_id, raw_data["odds"]["place"])
+                if r_normalized_place.success:
+                    for odds in r_normalized_place.value:
+                        upsert_place(cur, odds)
+                else:
+                    logger.error("race_id=%s normalize_place failed %s", race_id, r_normalized_place.error)
+                    failed = True
 
-            r_normalized_trio = normalize_trio(race_id, raw_data["odds"]["trio"])
-            if r_normalized_trio.success:
-                for odds in r_normalized_trio.value:
-                    upsert_trio(cur, odds)
-            else:
-                raise RuntimeError(f"normalize_trio failed:\n{r_normalized_trio.error}")
+                r_normalized_wide = normalize_wide(race_id, raw_data["odds"]["wide"])
+                if r_normalized_wide.success:
+                    for odds in r_normalized_wide.value:
+                        upsert_wide(cur, odds)
+                else:
+                    logger.error("race_id=%s normalize_wide failed %s", race_id, r_normalized_wide.error)
+                    failed = True
 
-            conn.commit()
-            conn.close()
+                r_normalized_trio = normalize_trio(race_id, raw_data["odds"]["trio"])
+                if r_normalized_trio.success:
+                    for odds in r_normalized_trio.value:
+                        upsert_trio(cur, odds)
+                else:
+                    logger.error("race_id=%s normalize_trio failed %s", race_id, r_normalized_trio.error)
+                    failed = True
 
-            print("[INFO] Normalizing/Upserting done")
+                if failed:
+                    conn.rollback()
+                    logger.error("Normalizing/Upserting failed; skipping race_id=%s", race_id)
+                    continue
 
-            time.sleep(0.5)
+                conn.commit()
 
-        print(f"[INFO][page={current_page}] Done")
+            logger.info("Normalizing/Upserting done")
+
+            time.sleep(random.uniform(1.0, 1.5))
+
+        logger.info("page=%s Done", current_page)
 
         check_race_ids_in_db()
 

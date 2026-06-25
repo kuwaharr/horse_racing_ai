@@ -1,0 +1,16 @@
+* text=auto eol=lf
+
+*.db binary
+*.sqlite binary
+*.sqlite3 binary
+*.pyc binary
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+
+*.joblib binary
+*.parquet binary

@@ -1,7 +1,7 @@
 from pathlib import Path
 
 
-DATA_ROOT = Path(r"D:\horse_racing_ai\data")
+DATA_ROOT = Path(r"C:\workspace\horse_racing_ai\data")
 
 DB_PATH = DATA_ROOT / "hr.db"
 

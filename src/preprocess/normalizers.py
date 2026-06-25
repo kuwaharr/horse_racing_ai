@@ -437,8 +437,10 @@ def normalize_place(race_id: str, odds: dict) -> Result[list]:
         try:
             if not odds.startswith("-"):
                 min_raw, max_raw = odds.split("-")
-                normalized_row["odds_min"] = float(min_raw.replace(",", ""))
-                normalized_row["odds_max"] = float(max_raw.replace(",", ""))
+                odds_min = float(min_raw.replace(",", ""))
+                odds_max = float(max_raw.replace(",", ""))
+                normalized_row["odds_min"] = odds_min if odds_min > 0 else None
+                normalized_row["odds_max"] = odds_max if odds_max > 0 else None
             else:
                 normalized_row["odds_max"] = None
                 normalized_row["odds_min"] = None
@@ -479,8 +481,10 @@ def normalize_wide(race_id: str, odds: dict) -> Result[list]:
         try:
             if not odds.startswith("-"):
                 min_raw, max_raw = odds.split("-")
-                normalized_row["odds_min"] = float(min_raw.replace(",", ""))
-                normalized_row["odds_max"] = float(max_raw.replace(",", ""))
+                odds_min = float(min_raw.replace(",", ""))
+                odds_max = float(max_raw.replace(",", ""))
+                normalized_row["odds_min"] = odds_min if odds_min > 0 else None
+                normalized_row["odds_max"] = odds_max if odds_max > 0 else None
             else:
                 normalized_row["odds_max"] = None
                 normalized_row["odds_min"] = None
@@ -520,7 +524,11 @@ def normalize_trio(race_id: str, odds: dict) -> Result[list]:
                 error=f"Invalid horse_numbers value: {nums}\n{e}"
             )
         try:
-            normalized_row["odds"] = float(odds.replace(",", "")) if not odds.startswith("-") else None
+            if not odds.startswith("-"):
+                odds_val = float(odds.replace(",", ""))
+                normalized_row["odds"] = odds_val if odds_val > 0 else None
+            else:
+                normalized_row["odds"] = None
         except Exception as e:
             return Result(
                 success=False,

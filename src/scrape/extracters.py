@@ -3,9 +3,11 @@ import re
 
 from bs4 import BeautifulSoup
 
+from ..common.logger import get_logger
 from ..common.maps import TRACK_MAP_INV
 from ..common.result import Result
 
+logger = get_logger("src.scrape.extracters")
 
 def parse_url(url: str) -> Result[dict]:
     try:
@@ -56,7 +58,7 @@ def extract_race_meta(soup: BeautifulSoup) -> Result[dict]:
             if post_time_m:
                 post_time = post_time_m.group(1)
             else:
-                print("[WARN][extract_race_meta] Could not get post_time")
+                logger.warning("extract_race_meta Could not get post_time")
                 post_time = None
 
         elif "m" in text:
@@ -81,9 +83,9 @@ def extract_race_meta(soup: BeautifulSoup) -> Result[dict]:
                     elif letter in ["A", "B", "C", "D"]:
                         course_variant = letter
                     else:
-                        print(f"[WARN][extract_race_meta] Unknown letter in course info: {letter}")
+                        logger.warning("extract_race_meta Unknown letter in course info: %s", letter)
             else:
-                print("[WARN][extract_race_meta] Could not get surface, distance, course info")
+                logger.warning("extract_race_meta Could not get surface, distance, course info")
                 surface = None
                 distance = None
                 course_direction = None
@@ -95,7 +97,7 @@ def extract_race_meta(soup: BeautifulSoup) -> Result[dict]:
             track_condition = text[3:]
 
         else:
-            print(f"[WARN][extract_race_meta] Unknown text in race_data_01_texts: {text}")
+            logger.warning("extract_race_meta Unknown text in race_data_01_texts: %s", text)
 
     race_size = None
     race_data_02_tag = race_column_01_tag.find("div", class_="RaceData02")
@@ -110,9 +112,9 @@ def extract_race_meta(soup: BeautifulSoup) -> Result[dict]:
         if race_data_02_tag_m:
             race_size = race_data_02_tag_m.group(1)
         else:
-            print("[WARN][extract_race_meta] Could not get race_size")
+            logger.warning("extract_race_meta Could not get race_size")
     else:
-        print("[WARN][extract_race_meta] Could not get race_size")
+        logger.warning("extract_race_meta Could not get race_size")
 
     race_meta = {
         "date": date,
@@ -230,7 +232,7 @@ def extract_runners(soup: BeautifulSoup) -> Result[list[dict]]:
         ):
             horse_id = m.group(1)
         else:
-            print("[WARN][extract_runners] Could not get horse_id")
+            logger.warning("extract_runners Could not get horse_id")
 
         row["horse_id"] = horse_id
 
@@ -245,7 +247,7 @@ def extract_runners(soup: BeautifulSoup) -> Result[list[dict]]:
             ):
                 jockey_id = m.group(1)
             else:
-                print("[WARN][extract_runners] Could not get jockey_id")
+                logger.warning("extract_runners Could not get jockey_id")
 
         row["jockey_id"] = jockey_id
 
@@ -260,7 +262,7 @@ def extract_runners(soup: BeautifulSoup) -> Result[list[dict]]:
             ):
                 trainer_id = m.group(1)
             else:
-                print("[WARN][extract_runners] Could not get trainer_id")
+                logger.warning("extract_runners Could not get trainer_id")
 
             row["trainer_id"] = trainer_id
 
