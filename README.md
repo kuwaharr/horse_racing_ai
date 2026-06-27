@@ -284,6 +284,12 @@ python scripts\export_rule_tier_selections.py --engine fastparquet --predictions
 python scripts\evaluate_feature_ablation.py --engine fastparquet
 ```
 
+CatBoostのfold平均特徴量重要度をCSVへ出力する場合:
+
+```powershell
+python scripts\export_catboost_feature_importance.py --engine fastparquet --training-dataset "D:\horse_racing_ai\data\feature\place_top3_dataset_affinity_lift_trial.parquet" --output "D:\horse_racing_ai\data\model\catboost_feature_importance_affinity_lift_trial.csv"
+```
+
 有望な固定ルールを詳細評価する場合:
 
 ```powershell

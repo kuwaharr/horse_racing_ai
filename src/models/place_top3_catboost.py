@@ -138,6 +138,10 @@ def _fit_and_evaluate_catboost_split(
     return {
         "features": feature_cols,
         "categorical_features": categorical_cols,
+        "feature_importance": [
+            {"feature": feature, "importance": float(importance)}
+            for feature, importance in zip(feature_cols, model.get_feature_importance())
+        ],
         "metrics": {
             "auc": float(roc_auc_score(test_y, pred)),
             "logloss": float(log_loss(test_y, pred)),
