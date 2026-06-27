@@ -153,6 +153,14 @@ python scripts\evaluate_baselines.py --engine fastparquet
 
 このベースライン評価は、人気と複勝オッズを使うため`late`データセット向けです。
 
+`early`データセットでLightGBMを学習し、評価時だけ複勝オッズを使って回収率を確認する場合:
+
+```powershell
+python scripts\evaluate_place_top3_lgbm.py --engine fastparquet
+```
+
+このLightGBM評価では、学習特徴量に人気、オッズ、馬体重を含めません。複勝オッズはテスト期間の回収率計算にだけ使います。
+
 ## 実装メモ
 
 - パス定義は`src/data/paths.py`にあります
@@ -162,6 +170,7 @@ python scripts\evaluate_baselines.py --engine fastparquet
 - SQLiteへの投入処理は`src/data/database.py`にあります
 - 学習用データセット作成処理は`src/features/`配下にあります
 - 評価処理は`src/evaluate/`配下にあります
+- モデル評価処理は`src/models/`配下にあります
 - `src/pipelines/scrape_to_db.py`にスクレイピングからDB投入までの処理本体があります
 - `scripts/scrape_to_db.py`はCLI用の薄い入口です
 
