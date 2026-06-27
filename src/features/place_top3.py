@@ -133,6 +133,15 @@ HISTORY_FEATURE_COLUMNS = [
     "trainer_surface_past_starts",
     "trainer_surface_past_top3",
     "trainer_surface_past_top3_rate",
+    "horse_jockey_past_starts",
+    "horse_jockey_past_top3",
+    "horse_jockey_past_top3_rate",
+    "jockey_trainer_past_starts",
+    "jockey_trainer_past_top3",
+    "jockey_trainer_past_top3_rate",
+    "horse_trainer_past_starts",
+    "horse_trainer_past_top3",
+    "horse_trainer_past_top3_rate",
     "race_horse_past_top3_rate_rank",
     "race_horse_past_top3_rate_diff",
     "race_horse_past_avg_finish_rank",
@@ -183,6 +192,12 @@ HISTORY_FEATURE_COLUMNS = [
     "race_trainer_track_past_top3_rate_diff",
     "race_trainer_surface_past_top3_rate_rank",
     "race_trainer_surface_past_top3_rate_diff",
+    "race_horse_jockey_past_top3_rate_rank",
+    "race_horse_jockey_past_top3_rate_diff",
+    "race_jockey_trainer_past_top3_rate_rank",
+    "race_jockey_trainer_past_top3_rate_diff",
+    "race_horse_trainer_past_top3_rate_rank",
+    "race_horse_trainer_past_top3_rate_diff",
     "race_gate_rank",
     "race_gate_diff",
     "race_horse_number_rank",
@@ -262,6 +277,9 @@ def _append_history_features(df):
     jockey_surface_stats = defaultdict(_empty_history_stat)
     trainer_track_stats = defaultdict(_empty_history_stat)
     trainer_surface_stats = defaultdict(_empty_history_stat)
+    horse_jockey_stats = defaultdict(_empty_history_stat)
+    jockey_trainer_stats = defaultdict(_empty_history_stat)
+    horse_trainer_stats = defaultdict(_empty_history_stat)
     recent_history = {
         name: defaultdict(list)
         for name, _ in entity_specs
@@ -335,6 +353,9 @@ def _append_history_features(df):
                 ("jockey_surface", jockey_surface_stats[(row["jockey_id"], row["surface_id"])]),
                 ("trainer_track", trainer_track_stats[(row["trainer_id"], row["track_id"])]),
                 ("trainer_surface", trainer_surface_stats[(row["trainer_id"], row["surface_id"])]),
+                ("horse_jockey", horse_jockey_stats[(row["horse_id"], row["jockey_id"])]),
+                ("jockey_trainer", jockey_trainer_stats[(row["jockey_id"], row["trainer_id"])]),
+                ("horse_trainer", horse_trainer_stats[(row["horse_id"], row["trainer_id"])]),
             ]:
                 starts = item["starts"]
                 top3 = item["top3"]
@@ -374,6 +395,9 @@ def _append_history_features(df):
                 jockey_surface_stats[(row["jockey_id"], row["surface_id"])],
                 trainer_track_stats[(row["trainer_id"], row["track_id"])],
                 trainer_surface_stats[(row["trainer_id"], row["surface_id"])],
+                horse_jockey_stats[(row["horse_id"], row["jockey_id"])],
+                jockey_trainer_stats[(row["jockey_id"], row["trainer_id"])],
+                horse_trainer_stats[(row["horse_id"], row["trainer_id"])],
             ]:
                 item["starts"] += 1
                 item["top3"] += target
@@ -456,6 +480,9 @@ def _append_race_relative_features(df):
         ("trainer_recent20_avg_finish", True),
         ("trainer_track_past_top3_rate", False),
         ("trainer_surface_past_top3_rate", False),
+        ("horse_jockey_past_top3_rate", False),
+        ("jockey_trainer_past_top3_rate", False),
+        ("horse_trainer_past_top3_rate", False),
         ("gate", True),
         ("horse_number", True),
         ("weight", False),
