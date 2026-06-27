@@ -1,5 +1,6 @@
 import sqlite3
 from collections import defaultdict
+from datetime import date
 from pathlib import Path
 
 
@@ -84,6 +85,13 @@ HISTORY_FEATURE_COLUMNS = [
     "horse_past_top3",
     "horse_past_top3_rate",
     "horse_past_avg_finish",
+    "horse_recent3_top3_rate",
+    "horse_recent3_avg_finish",
+    "horse_recent5_top3_rate",
+    "horse_recent5_avg_finish",
+    "horse_days_since_last",
+    "horse_prev_distance",
+    "horse_distance_diff_prev",
     "horse_track_past_starts",
     "horse_track_past_top3",
     "horse_track_past_top3_rate",
@@ -97,6 +105,8 @@ HISTORY_FEATURE_COLUMNS = [
     "jockey_past_top3",
     "jockey_past_top3_rate",
     "jockey_past_avg_finish",
+    "jockey_recent20_top3_rate",
+    "jockey_recent20_avg_finish",
     "jockey_track_past_starts",
     "jockey_track_past_top3",
     "jockey_track_past_top3_rate",
@@ -107,6 +117,8 @@ HISTORY_FEATURE_COLUMNS = [
     "trainer_past_top3",
     "trainer_past_top3_rate",
     "trainer_past_avg_finish",
+    "trainer_recent20_top3_rate",
+    "trainer_recent20_avg_finish",
     "trainer_track_past_starts",
     "trainer_track_past_top3",
     "trainer_track_past_top3_rate",
@@ -117,6 +129,14 @@ HISTORY_FEATURE_COLUMNS = [
     "race_horse_past_top3_rate_diff",
     "race_horse_past_avg_finish_rank",
     "race_horse_past_avg_finish_diff",
+    "race_horse_recent3_top3_rate_rank",
+    "race_horse_recent3_top3_rate_diff",
+    "race_horse_recent3_avg_finish_rank",
+    "race_horse_recent3_avg_finish_diff",
+    "race_horse_days_since_last_rank",
+    "race_horse_days_since_last_diff",
+    "race_horse_distance_diff_prev_rank",
+    "race_horse_distance_diff_prev_diff",
     "race_horse_track_past_top3_rate_rank",
     "race_horse_track_past_top3_rate_diff",
     "race_horse_surface_past_top3_rate_rank",
@@ -127,6 +147,10 @@ HISTORY_FEATURE_COLUMNS = [
     "race_jockey_past_top3_rate_diff",
     "race_jockey_past_avg_finish_rank",
     "race_jockey_past_avg_finish_diff",
+    "race_jockey_recent20_top3_rate_rank",
+    "race_jockey_recent20_top3_rate_diff",
+    "race_jockey_recent20_avg_finish_rank",
+    "race_jockey_recent20_avg_finish_diff",
     "race_jockey_track_past_top3_rate_rank",
     "race_jockey_track_past_top3_rate_diff",
     "race_jockey_surface_past_top3_rate_rank",
@@ -135,6 +159,10 @@ HISTORY_FEATURE_COLUMNS = [
     "race_trainer_past_top3_rate_diff",
     "race_trainer_past_avg_finish_rank",
     "race_trainer_past_avg_finish_diff",
+    "race_trainer_recent20_top3_rate_rank",
+    "race_trainer_recent20_top3_rate_diff",
+    "race_trainer_recent20_avg_finish_rank",
+    "race_trainer_recent20_avg_finish_diff",
     "race_trainer_track_past_top3_rate_rank",
     "race_trainer_track_past_top3_rate_diff",
     "race_trainer_surface_past_top3_rate_rank",
@@ -218,9 +246,15 @@ def _append_history_features(df):
     jockey_surface_stats = defaultdict(_empty_history_stat)
     trainer_track_stats = defaultdict(_empty_history_stat)
     trainer_surface_stats = defaultdict(_empty_history_stat)
+    recent_history = {
+        name: defaultdict(list)
+        for name, _ in entity_specs
+    }
+    horse_last_seen = {}
 
     df = df.sort_values(["date", "race_id", "horse_number"]).copy()
     df["distance_band"] = df["distance"].map(_distance_band)
+    df["date_obj"] = df["date"].map(date.fromisoformat)
     history_rows = []
 
     for _, day_df in df.groupby("date", sort=True):
@@ -236,6 +270,28 @@ def _append_history_features(df):
                 history_row[f"{name}_past_top3"] = top3
                 history_row[f"{name}_past_top3_rate"] = None if starts == 0 else top3 / starts
                 history_row[f"{name}_past_avg_finish"] = None if starts == 0 else finish_sum / starts
+                recent = recent_history[name][value]
+                if name == "horse":
+                    history_row["horse_recent3_top3_rate"] = _recent_top3_rate(recent, 3)
+                    history_row["horse_recent3_avg_finish"] = _recent_avg_finish(recent, 3)
+                    history_row["horse_recent5_top3_rate"] = _recent_top3_rate(recent, 5)
+                    history_row["horse_recent5_avg_finish"] = _recent_avg_finish(recent, 5)
+                    last_seen = horse_last_seen.get(value)
+                    if last_seen is None:
+                        history_row["horse_days_since_last"] = None
+                        history_row["horse_prev_distance"] = None
+                        history_row["horse_distance_diff_prev"] = None
+                    else:
+                        last_date, last_distance = last_seen
+                        history_row["horse_days_since_last"] = (row["date_obj"] - last_date).days
+                        history_row["horse_prev_distance"] = last_distance
+                        history_row["horse_distance_diff_prev"] = row["distance"] - last_distance
+                elif name == "jockey":
+                    history_row["jockey_recent20_top3_rate"] = _recent_top3_rate(recent, 20)
+                    history_row["jockey_recent20_avg_finish"] = _recent_avg_finish(recent, 20)
+                elif name == "trainer":
+                    history_row["trainer_recent20_top3_rate"] = _recent_top3_rate(recent, 20)
+                    history_row["trainer_recent20_avg_finish"] = _recent_avg_finish(recent, 20)
             for feature_name, item in [
                 ("horse_track", horse_track_stats[(row["horse_id"], row["track_id"])]),
                 ("horse_surface", horse_surface_stats[(row["horse_id"], row["surface_id"])]),
@@ -263,6 +319,8 @@ def _append_history_features(df):
                 item["starts"] += 1
                 item["top3"] += target
                 item["finish_sum"] += finish
+                recent_history[name][row[id_col]].append({"top3": target, "finish": finish})
+            horse_last_seen[row["horse_id"]] = (row["date_obj"], int(row["distance"]))
             for item in [
                 horse_track_stats[(row["horse_id"], row["track_id"])],
                 horse_surface_stats[(row["horse_id"], row["surface_id"])],
@@ -283,11 +341,25 @@ def _append_history_features(df):
     history_df = pd.DataFrame(history_rows).set_index("__idx")
     df = df.join(history_df).sort_values(["date", "race_id", "horse_number"])
     df = _append_race_relative_features(df)
-    return df.drop(columns=["distance_band"])
+    return df.drop(columns=["distance_band", "date_obj"])
 
 
 def _empty_history_stat() -> dict:
     return {"starts": 0, "top3": 0}
+
+
+def _recent_top3_rate(rows: list[dict], n: int) -> float | None:
+    recent = rows[-n:]
+    if not recent:
+        return None
+    return sum(row["top3"] for row in recent) / len(recent)
+
+
+def _recent_avg_finish(rows: list[dict], n: int) -> float | None:
+    recent = rows[-n:]
+    if not recent:
+        return None
+    return sum(row["finish"] for row in recent) / len(recent)
 
 
 def _distance_band(distance: int) -> str:
@@ -304,15 +376,23 @@ def _append_race_relative_features(df):
     relative_specs = [
         ("horse_past_top3_rate", False),
         ("horse_past_avg_finish", True),
+        ("horse_recent3_top3_rate", False),
+        ("horse_recent3_avg_finish", True),
+        ("horse_days_since_last", True),
+        ("horse_distance_diff_prev", True),
         ("horse_track_past_top3_rate", False),
         ("horse_surface_past_top3_rate", False),
         ("horse_distance_band_past_top3_rate", False),
         ("jockey_past_top3_rate", False),
         ("jockey_past_avg_finish", True),
+        ("jockey_recent20_top3_rate", False),
+        ("jockey_recent20_avg_finish", True),
         ("jockey_track_past_top3_rate", False),
         ("jockey_surface_past_top3_rate", False),
         ("trainer_past_top3_rate", False),
         ("trainer_past_avg_finish", True),
+        ("trainer_recent20_top3_rate", False),
+        ("trainer_recent20_avg_finish", True),
         ("trainer_track_past_top3_rate", False),
         ("trainer_surface_past_top3_rate", False),
         ("gate", True),
