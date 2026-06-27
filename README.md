@@ -143,6 +143,12 @@ python scripts\build_place_top3_dataset.py --engine fastparquet
 python scripts\build_place_top3_dataset.py --output "D:\horse_racing_ai\data\feature\place_top3_dataset.parquet"
 ```
 
+人気順・複勝オッズ順のベースラインを評価する場合:
+
+```powershell
+python scripts\evaluate_baselines.py --engine fastparquet
+```
+
 ## 実装メモ
 
 - パス定義は`src/data/paths.py`にあります
@@ -151,6 +157,7 @@ python scripts\build_place_top3_dataset.py --output "D:\horse_racing_ai\data\fea
 - 正規化処理は`src/preprocess/normalizers.py`に集約されています
 - SQLiteへの投入処理は`src/data/database.py`にあります
 - 学習用データセット作成処理は`src/features/`配下にあります
+- 評価処理は`src/evaluate/`配下にあります
 - `src/pipelines/scrape_to_db.py`にスクレイピングからDB投入までの処理本体があります
 - `scripts/scrape_to_db.py`はCLI用の薄い入口です
 
