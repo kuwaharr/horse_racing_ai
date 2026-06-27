@@ -72,7 +72,13 @@ def _rule_key(rule: dict) -> str:
     )
 
 
-def _evaluate_rule(predictions, rule: dict, stake: float, min_fold_selections: int) -> dict | None:
+def _evaluate_rule(
+    predictions,
+    rule: dict,
+    stake: float,
+    min_fold_selections: int,
+    min_fold_return_mid: float | None,
+) -> dict | None:
     selected = _apply_fixed_rule(
         predictions,
         pred_min=rule["pred_min"],
@@ -97,6 +103,8 @@ def _evaluate_rule(predictions, rule: dict, stake: float, min_fold_selections: i
         return None
     if min(fold_selections) < min_fold_selections:
         return None
+    if min_fold_return_mid is not None and min(fold_returns) < min_fold_return_mid:
+        return None
 
     result = dict(rule)
     result.update(overall)
@@ -114,6 +122,7 @@ def main() -> None:
     arg_parser.add_argument("--stake", type=float, default=100.0)
     arg_parser.add_argument("--min-selections", type=int, default=100)
     arg_parser.add_argument("--min-fold-selections", type=int, default=10)
+    arg_parser.add_argument("--min-fold-return-mid", type=float, default=None)
     arg_parser.add_argument("--top-n", type=int, default=20)
     args = arg_parser.parse_args()
 
@@ -125,7 +134,13 @@ def main() -> None:
     predictions = pd.read_parquet(args.predictions, engine=args.engine)
     results = []
     for rule in _candidate_rules():
-        result = _evaluate_rule(predictions, rule, stake=args.stake, min_fold_selections=args.min_fold_selections)
+        result = _evaluate_rule(
+            predictions,
+            rule,
+            stake=args.stake,
+            min_fold_selections=args.min_fold_selections,
+            min_fold_return_mid=args.min_fold_return_mid,
+        )
         if result is None or result["selections"] < args.min_selections:
             continue
         results.append(result)
@@ -145,6 +160,7 @@ def main() -> None:
     print(f"Races: {int(predictions['race_id'].nunique()):,}")
     print(f"Min selections: {args.min_selections}")
     print(f"Min fold selections: {args.min_fold_selections}")
+    print(f"Min fold return mid: {args.min_fold_return_mid}")
     print("")
     print("rule_key                                                        races  selections  hits  hit_rate  return_mid  min_mid  max_mid  min_fold_n")
     for row in results[: args.top_n]:

@@ -223,10 +223,16 @@ python scripts\evaluate_fixed_rule_from_predictions.py --engine fastparquet --pr
 python scripts\search_rules_from_predictions.py --engine fastparquet --min-selections 120 --min-fold-selections 20
 ```
 
+各foldの回収率下限も指定して、不安定な候補を除外する場合:
+
+```powershell
+python scripts\search_rules_from_predictions.py --engine fastparquet --min-selections 120 --min-fold-selections 20 --min-fold-return-mid 100
+```
+
 この設定では、上記の`pred_top3>=0.40`、複勝オッズ中間値`[3.0,5.0)`、距離`[1800,2200)`、開催場`3,7,10`除外が候補内トップでした。
 探索候補には複勝オッズ中間値の`[2.5,5.0)`、`[3.0,4.0)`、`[4.0,5.0)`、`[3.0,6.0)`なども含めています。
 
-買い点数を増やす場合は、`pred_top3>=0.35`、複勝オッズ中間値`[3.0,5.0)`、距離`[1800,2200)`、開催場`3,7,10`除外が候補です。walk-forward 4 foldで180レース、220点、83的中、的中率37.73%、回収率139.48%でした。
+買い点数を増やす場合は、`pred_top3>=0.35`、複勝オッズ中間値`[3.0,5.0)`、距離`[1800,2200)`、開催場`3,7,10`除外が候補です。walk-forward 4 foldで180レース、220点、83的中、的中率37.73%、回収率139.48%でした。各foldの最低回収率を100%以上にした探索でも、この候補は最低116.55%で残ります。
 
 有望な固定ルールを詳細評価する場合:
 
