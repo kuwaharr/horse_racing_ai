@@ -272,6 +272,12 @@ python scripts\search_rules_from_predictions.py --engine fastparquet --min-selec
 python scripts\evaluate_rule_tiers_from_predictions.py --engine fastparquet --predictions "D:\horse_racing_ai\data\model\catboost_place_top3_predictions_affinity_lift_trial.parquet"
 ```
 
+3候補に該当した馬をCSVへ出力する場合:
+
+```powershell
+python scripts\export_rule_tier_selections.py --engine fastparquet --predictions "D:\horse_racing_ai\data\model\catboost_place_top3_predictions_affinity_lift_trial.parquet" --output "D:\horse_racing_ai\data\model\rule_tier_selections_affinity_lift_trial.csv"
+```
+
 特徴量グループごとの影響を確認する場合:
 
 ```powershell
