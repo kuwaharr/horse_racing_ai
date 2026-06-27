@@ -1,6 +1,7 @@
 import sqlite3
 from collections import defaultdict
 from datetime import date
+from math import isnan
 from pathlib import Path
 
 
@@ -85,6 +86,10 @@ HISTORY_FEATURE_COLUMNS = [
     "horse_past_top3",
     "horse_past_top3_rate",
     "horse_past_avg_finish",
+    "horse_past_avg_time_per_200",
+    "horse_past_avg_finish_diff",
+    "horse_past_avg_finish_3f",
+    "horse_past_avg_corner4",
     "horse_past_avg_distance",
     "horse_distance_diff_avg",
     "horse_past_min_distance",
@@ -95,8 +100,16 @@ HISTORY_FEATURE_COLUMNS = [
     "horse_weight_diff_avg",
     "horse_recent3_top3_rate",
     "horse_recent3_avg_finish",
+    "horse_recent3_avg_time_per_200",
+    "horse_recent3_avg_finish_diff",
+    "horse_recent3_avg_finish_3f",
+    "horse_recent3_avg_corner4",
     "horse_recent5_top3_rate",
     "horse_recent5_avg_finish",
+    "horse_recent5_avg_time_per_200",
+    "horse_recent5_avg_finish_diff",
+    "horse_recent5_avg_finish_3f",
+    "horse_recent5_avg_corner4",
     "horse_days_since_last",
     "horse_prev_distance",
     "horse_distance_diff_prev",
@@ -146,6 +159,14 @@ HISTORY_FEATURE_COLUMNS = [
     "race_horse_past_top3_rate_diff",
     "race_horse_past_avg_finish_rank",
     "race_horse_past_avg_finish_diff",
+    "race_horse_past_avg_time_per_200_rank",
+    "race_horse_past_avg_time_per_200_diff",
+    "race_horse_past_avg_finish_diff_rank",
+    "race_horse_past_avg_finish_diff_diff",
+    "race_horse_past_avg_finish_3f_rank",
+    "race_horse_past_avg_finish_3f_diff",
+    "race_horse_past_avg_corner4_rank",
+    "race_horse_past_avg_corner4_diff",
     "race_horse_distance_diff_avg_rank",
     "race_horse_distance_diff_avg_diff",
     "race_horse_distance_above_max_rank",
@@ -158,6 +179,22 @@ HISTORY_FEATURE_COLUMNS = [
     "race_horse_recent3_top3_rate_diff",
     "race_horse_recent3_avg_finish_rank",
     "race_horse_recent3_avg_finish_diff",
+    "race_horse_recent3_avg_time_per_200_rank",
+    "race_horse_recent3_avg_time_per_200_diff",
+    "race_horse_recent3_avg_finish_diff_rank",
+    "race_horse_recent3_avg_finish_diff_diff",
+    "race_horse_recent3_avg_finish_3f_rank",
+    "race_horse_recent3_avg_finish_3f_diff",
+    "race_horse_recent3_avg_corner4_rank",
+    "race_horse_recent3_avg_corner4_diff",
+    "race_horse_recent5_avg_time_per_200_rank",
+    "race_horse_recent5_avg_time_per_200_diff",
+    "race_horse_recent5_avg_finish_diff_rank",
+    "race_horse_recent5_avg_finish_diff_diff",
+    "race_horse_recent5_avg_finish_3f_rank",
+    "race_horse_recent5_avg_finish_3f_diff",
+    "race_horse_recent5_avg_corner4_rank",
+    "race_horse_recent5_avg_corner4_diff",
     "race_horse_days_since_last_rank",
     "race_horse_days_since_last_diff",
     "race_horse_distance_diff_prev_rank",
@@ -232,7 +269,11 @@ SELECT
     ru.age,
     ru.jockey_id,
     ru.weight,
+    ru.time_sec,
+    ru.finish_diff,
     ru.popularity,
+    ru.finish_3f,
+    ru.corner_4,
     ru.stable_id,
     ru.trainer_id,
     ru.horse_weight,
@@ -306,6 +347,22 @@ def _append_history_features(df):
                 history_row[f"{name}_past_avg_finish"] = None if starts == 0 else finish_sum / starts
                 recent = recent_history[name][value]
                 if name == "horse":
+                    time_count = item["time_per_200_count"]
+                    finish_diff_count = item["finish_diff_count"]
+                    finish_3f_count = item["finish_3f_count"]
+                    corner4_count = item["corner4_count"]
+                    history_row["horse_past_avg_time_per_200"] = (
+                        None if time_count == 0 else item["time_per_200_sum"] / time_count
+                    )
+                    history_row["horse_past_avg_finish_diff"] = (
+                        None if finish_diff_count == 0 else item["finish_diff_sum"] / finish_diff_count
+                    )
+                    history_row["horse_past_avg_finish_3f"] = (
+                        None if finish_3f_count == 0 else item["finish_3f_sum"] / finish_3f_count
+                    )
+                    history_row["horse_past_avg_corner4"] = (
+                        None if corner4_count == 0 else item["corner4_sum"] / corner4_count
+                    )
                     avg_distance = None if starts == 0 else item["distance_sum"] / starts
                     avg_weight = None if starts == 0 else item["weight_sum"] / starts
                     min_distance = item["min_distance"]
@@ -324,8 +381,16 @@ def _append_history_features(df):
                     history_row["horse_weight_diff_avg"] = None if avg_weight is None else row["weight"] - avg_weight
                     history_row["horse_recent3_top3_rate"] = _recent_top3_rate(recent, 3)
                     history_row["horse_recent3_avg_finish"] = _recent_avg_finish(recent, 3)
+                    history_row["horse_recent3_avg_time_per_200"] = _recent_avg_value(recent, "time_per_200", 3)
+                    history_row["horse_recent3_avg_finish_diff"] = _recent_avg_value(recent, "finish_diff", 3)
+                    history_row["horse_recent3_avg_finish_3f"] = _recent_avg_value(recent, "finish_3f", 3)
+                    history_row["horse_recent3_avg_corner4"] = _recent_avg_value(recent, "corner4", 3)
                     history_row["horse_recent5_top3_rate"] = _recent_top3_rate(recent, 5)
                     history_row["horse_recent5_avg_finish"] = _recent_avg_finish(recent, 5)
+                    history_row["horse_recent5_avg_time_per_200"] = _recent_avg_value(recent, "time_per_200", 5)
+                    history_row["horse_recent5_avg_finish_diff"] = _recent_avg_value(recent, "finish_diff", 5)
+                    history_row["horse_recent5_avg_finish_3f"] = _recent_avg_value(recent, "finish_3f", 5)
+                    history_row["horse_recent5_avg_corner4"] = _recent_avg_value(recent, "corner4", 5)
                     last_seen = horse_last_seen.get(value)
                     if last_seen is None:
                         history_row["horse_days_since_last"] = None
@@ -373,6 +438,26 @@ def _append_history_features(df):
                 item["top3"] += target
                 item["finish_sum"] += finish
                 if name == "horse":
+                    distance = _valid_float(row["distance"])
+                    time_sec = _valid_float(row["time_sec"])
+                    if time_sec is not None and distance:
+                        time_per_200 = time_sec / distance * 200.0
+                        item["time_per_200_sum"] += time_per_200
+                        item["time_per_200_count"] += 1
+                    else:
+                        time_per_200 = None
+                    finish_diff = _valid_float(row["finish_diff"])
+                    if finish_diff is not None:
+                        item["finish_diff_sum"] += finish_diff
+                        item["finish_diff_count"] += 1
+                    finish_3f = _valid_float(row["finish_3f"])
+                    if finish_3f is not None:
+                        item["finish_3f_sum"] += finish_3f
+                        item["finish_3f_count"] += 1
+                    corner4 = _valid_float(row["corner_4"])
+                    if corner4 is not None:
+                        item["corner4_sum"] += corner4
+                        item["corner4_count"] += 1
                     item["distance_sum"] += float(row["distance"])
                     item["weight_sum"] += float(row["weight"])
                     item["min_distance"] = (
@@ -385,7 +470,17 @@ def _append_history_features(df):
                         if item["max_distance"] is None
                         else max(item["max_distance"], int(row["distance"]))
                     )
-                recent_history[name][row[id_col]].append({"top3": target, "finish": finish})
+                recent_item = {"top3": target, "finish": finish}
+                if name == "horse":
+                    recent_item.update(
+                        {
+                            "time_per_200": time_per_200,
+                            "finish_diff": finish_diff,
+                            "finish_3f": finish_3f,
+                            "corner4": corner4,
+                        }
+                    )
+                recent_history[name][row[id_col]].append(recent_item)
             horse_last_seen[row["horse_id"]] = (row["date_obj"], int(row["distance"]))
             for item in [
                 horse_track_stats[(row["horse_id"], row["track_id"])],
@@ -424,6 +519,14 @@ def _empty_entity_stat() -> dict:
         "finish_sum": 0.0,
         "distance_sum": 0.0,
         "weight_sum": 0.0,
+        "time_per_200_sum": 0.0,
+        "time_per_200_count": 0,
+        "finish_diff_sum": 0.0,
+        "finish_diff_count": 0,
+        "finish_3f_sum": 0.0,
+        "finish_3f_count": 0,
+        "corner4_sum": 0.0,
+        "corner4_count": 0,
         "min_distance": None,
         "max_distance": None,
     }
@@ -443,6 +546,22 @@ def _recent_avg_finish(rows: list[dict], n: int) -> float | None:
     return sum(row["finish"] for row in recent) / len(recent)
 
 
+def _recent_avg_value(rows: list[dict], key: str, n: int) -> float | None:
+    values = [row[key] for row in rows[-n:] if row.get(key) is not None]
+    if not values:
+        return None
+    return sum(values) / len(values)
+
+
+def _valid_float(value) -> float | None:
+    if value is None:
+        return None
+    value = float(value)
+    if isnan(value):
+        return None
+    return value
+
+
 def _distance_band(distance: int) -> str:
     if distance < 1400:
         return "under1400"
@@ -454,15 +573,29 @@ def _distance_band(distance: int) -> str:
 
 
 def _append_race_relative_features(df):
+    import pandas as pd
+
     relative_specs = [
         ("horse_past_top3_rate", False),
         ("horse_past_avg_finish", True),
+        ("horse_past_avg_time_per_200", True),
+        ("horse_past_avg_finish_diff", True),
+        ("horse_past_avg_finish_3f", True),
+        ("horse_past_avg_corner4", True),
         ("horse_distance_diff_avg", True),
         ("horse_distance_above_max", True),
         ("horse_distance_below_min", True),
         ("horse_weight_diff_avg", True),
         ("horse_recent3_top3_rate", False),
         ("horse_recent3_avg_finish", True),
+        ("horse_recent3_avg_time_per_200", True),
+        ("horse_recent3_avg_finish_diff", True),
+        ("horse_recent3_avg_finish_3f", True),
+        ("horse_recent3_avg_corner4", True),
+        ("horse_recent5_avg_time_per_200", True),
+        ("horse_recent5_avg_finish_diff", True),
+        ("horse_recent5_avg_finish_3f", True),
+        ("horse_recent5_avg_corner4", True),
         ("horse_days_since_last", True),
         ("horse_distance_diff_prev", True),
         ("horse_track_past_top3_rate", False),
@@ -488,13 +621,14 @@ def _append_race_relative_features(df):
         ("weight", False),
         ("age", True),
     ]
+    relative_columns = {}
     for col, ascending in relative_specs:
         rank_col = f"race_{col}_rank"
         diff_col = f"race_{col}_diff"
         filled = df[col].fillna(-1)
-        df[rank_col] = filled.groupby(df["race_id"]).rank(method="average", ascending=ascending)
-        df[diff_col] = df[col] - df.groupby("race_id")[col].transform("mean")
-    return df
+        relative_columns[rank_col] = filled.groupby(df["race_id"]).rank(method="average", ascending=ascending)
+        relative_columns[diff_col] = df[col] - df.groupby("race_id")[col].transform("mean")
+    return pd.concat([df, pd.DataFrame(relative_columns, index=df.index)], axis=1)
 
 
 def build_place_top3_dataset(
