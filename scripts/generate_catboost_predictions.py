@@ -30,6 +30,7 @@ def main() -> None:
     arg_parser.add_argument("--min-train-ratio", type=float, default=0.5)
     arg_parser.add_argument("--stake", type=float, default=100.0)
     arg_parser.add_argument("--drop-feature-patterns", type=_optional_str_list, default=None)
+    arg_parser.add_argument("--train-surface-id", type=int, default=None)
     args = arg_parser.parse_args()
 
     report = build_catboost_walk_forward_predictions(
@@ -40,6 +41,7 @@ def main() -> None:
         min_train_ratio=args.min_train_ratio,
         stake=args.stake,
         drop_feature_patterns=args.drop_feature_patterns,
+        train_surface_id=args.train_surface_id,
     )
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -50,6 +52,7 @@ def main() -> None:
     print(f"Output: {args.output}")
     print(f"Rows: {len(report['predictions']):,}")
     print(f"Folds: {report['n_splits']}")
+    print(f"Train surface id: {report['train_filter']['surface_id']}")
     print(f"Dropped features: {len(report['dropped_features'])}")
     print("fold  test_start  test_end    train_rows  test_rows  test_races      AUC  logloss    brier")
     for row in report["folds"]:

@@ -48,6 +48,12 @@ def _drop_feature_patterns(df, patterns: list[str] | None):
     return df.drop(columns=drop_cols), drop_cols
 
 
+def _filter_by_surface(df, surface_id: int | None):
+    if surface_id is None:
+        return df
+    return df[df["surface_id"] == surface_id]
+
+
 def _prepare_catboost_features(train_df, test_df):
     feature_cols = [c for c in train_df.columns if c not in EXCLUDE_FEATURE_COLUMNS]
     train_x = train_df[feature_cols].copy()
@@ -233,6 +239,7 @@ def evaluate_fixed_place_top3_catboost_rule_walk_forward(
     exclude_track_ids: list[int] | None = None,
     surface_id: int | None = None,
     drop_feature_patterns: list[str] | None = None,
+    train_surface_id: int | None = None,
 ) -> dict[str, Any]:
     training_df = _read_parquet(training_dataset_path, engine)
     training_df, dropped_features = _drop_feature_patterns(training_df, drop_feature_patterns)
@@ -245,6 +252,9 @@ def evaluate_fixed_place_top3_catboost_rule_walk_forward(
     selected_rows = []
     for fold_idx, (test_start, test_end) in enumerate(splits, start=1):
         train_df, test_df = _split_by_start_date(training_df, test_start, test_end)
+        train_df = _filter_by_surface(train_df, train_surface_id)
+        if train_df.empty:
+            raise ValueError(f"No training rows after train surface filter: surface_id={train_surface_id}")
         split_report = _fit_and_evaluate_catboost_split(
             train_df=train_df,
             test_df=test_df,
@@ -302,6 +312,7 @@ def evaluate_fixed_place_top3_catboost_rule_walk_forward(
         "train_filter": {
             "distance_min": None,
             "distance_max": None,
+            "surface_id": train_surface_id,
         },
         "rule": {
             "pred_min": pred_min,
@@ -331,6 +342,7 @@ def build_catboost_walk_forward_predictions(
     min_train_ratio: float = 0.5,
     stake: float = 100.0,
     drop_feature_patterns: list[str] | None = None,
+    train_surface_id: int | None = None,
 ) -> dict[str, Any]:
     training_df = _read_parquet(training_dataset_path, engine)
     training_df, dropped_features = _drop_feature_patterns(training_df, drop_feature_patterns)
@@ -343,6 +355,9 @@ def build_catboost_walk_forward_predictions(
     fold_reports = []
     for fold_idx, (test_start, test_end) in enumerate(splits, start=1):
         train_df, test_df = _split_by_start_date(training_df, test_start, test_end)
+        train_df = _filter_by_surface(train_df, train_surface_id)
+        if train_df.empty:
+            raise ValueError(f"No training rows after train surface filter: surface_id={train_surface_id}")
         split_report = _fit_and_evaluate_catboost_split(
             train_df=train_df,
             test_df=test_df,
@@ -383,6 +398,9 @@ def build_catboost_walk_forward_predictions(
         "races": int(training_df["race_id"].nunique()),
         "n_splits": len(fold_reports),
         "min_train_ratio": min_train_ratio,
+        "train_filter": {
+            "surface_id": train_surface_id,
+        },
         "dropped_features": dropped_features,
         "folds": fold_reports,
         "predictions": predictions,

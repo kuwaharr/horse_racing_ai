@@ -723,6 +723,13 @@ def format_fixed_rule_report(report: dict[str, Any]) -> str:
         if train_filter["distance_min"] is None and train_filter["distance_max"] is None
         else f"distance=[{train_filter['distance_min']},{train_filter['distance_max']})"
     )
+    train_surface_id = train_filter.get("surface_id")
+    train_filter_parts = []
+    if train_distance != "none":
+        train_filter_parts.append(train_distance)
+    if train_surface_id is not None:
+        train_filter_parts.append(f"surface_id={train_surface_id}")
+    train_filter_text = ", ".join(train_filter_parts) if train_filter_parts else "none"
     overall = report["overall"]
     lines = [
         f"Training dataset: {report['training_dataset_path']}",
@@ -730,7 +737,7 @@ def format_fixed_rule_report(report: dict[str, Any]) -> str:
         f"Rows: {report['rows']:,}",
         f"Races: {report['races']:,}",
         f"Folds: {report['n_splits']}",
-        f"Train filter: {train_distance}",
+        f"Train filter: {train_filter_text}",
         (
             "Rule: "
             f"pred_top3>={rule['pred_min']:.2f}, "

@@ -206,6 +206,12 @@ python scripts\evaluate_fixed_place_top3_catboost_rule.py --engine fastparquet -
 python scripts\evaluate_fixed_place_top3_catboost_rule.py --engine fastparquet --drop-feature-patterns "horse_jockey_,jockey_trainer_,horse_trainer_"
 ```
 
+芝やダートだけで学習した専門モデルを検証する場合:
+
+```powershell
+python scripts\evaluate_fixed_place_top3_catboost_rule.py --engine fastparquet --train-surface-id 0 --surface-id 0
+```
+
 現時点の代表結果は、CatBoostで`pred_top3>=0.40`、複勝オッズ中間値`[3.0,5.0)`、距離`[1800,2200)`を買う条件です。walk-forward 4 foldで129レース、149点、63的中、的中率42.28%、複勝オッズ中間値ベース回収率154.53%でした。
 
 CatBoostのwalk-forward予測を保存し、重い再学習を避けて買い条件だけを高速に検証する場合:
@@ -219,6 +225,12 @@ python scripts\evaluate_fixed_rule_from_predictions.py --engine fastparquet --pr
 
 ```powershell
 python scripts\generate_catboost_predictions.py --engine fastparquet --drop-feature-patterns "horse_jockey_,jockey_trainer_,horse_trainer_" --output "D:\horse_racing_ai\data\model\catboost_place_top3_predictions_no_connection.parquet"
+```
+
+芝やダートだけで学習した予測キャッシュを作る場合:
+
+```powershell
+python scripts\generate_catboost_predictions.py --engine fastparquet --train-surface-id 0 --output "D:\horse_racing_ai\data\model\catboost_place_top3_predictions_turf_train.parquet"
 ```
 
 保存済み予測のデフォルト出力先は`D:\horse_racing_ai\data\model\catboost_place_top3_predictions.parquet`です。例えば開催場`3,7,10`を除外する条件は次のように確認できます。

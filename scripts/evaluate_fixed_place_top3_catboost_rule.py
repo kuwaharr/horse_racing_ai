@@ -48,6 +48,7 @@ def main() -> None:
     arg_parser.add_argument("--exclude-track-ids", type=_optional_int_list, default=None)
     arg_parser.add_argument("--surface-id", type=_optional_int, default=None)
     arg_parser.add_argument("--drop-feature-patterns", type=_optional_str_list, default=None)
+    arg_parser.add_argument("--train-surface-id", type=_optional_int, default=None)
     args = arg_parser.parse_args()
 
     report = evaluate_fixed_place_top3_catboost_rule_walk_forward(
@@ -67,6 +68,7 @@ def main() -> None:
         exclude_track_ids=args.exclude_track_ids,
         surface_id=args.surface_id,
         drop_feature_patterns=args.drop_feature_patterns,
+        train_surface_id=args.train_surface_id,
     )
     print(format_fixed_rule_report(report))
 
