@@ -113,6 +113,41 @@ def _threshold_report(
     return results
 
 
+def _band_report(df, band_col: str, bins: list[float], stake: float) -> list[dict[str, Any]]:
+    try:
+        import pandas as pd
+    except ModuleNotFoundError as e:
+        raise RuntimeError("帯別分析には pandas が必要です。") from e
+
+    scored = df.dropna(subset=[band_col, "place_odds_min", "place_odds_max"]).copy()
+    scored["place_odds_mid"] = (scored["place_odds_min"] + scored["place_odds_max"]) / 2
+    scored["band"] = pd.cut(scored[band_col], bins=bins, include_lowest=True, right=False)
+
+    results = []
+    for band, selected in scored.groupby("band", observed=True):
+        selections = len(selected)
+        hits = int(selected["target_top3"].sum())
+        stake_total = selections * stake
+        return_min = float((selected["target_top3"] * selected["place_odds_min"] * stake).sum())
+        return_mid = float((selected["target_top3"] * selected["place_odds_mid"] * stake).sum())
+        return_max = float((selected["target_top3"] * selected["place_odds_max"] * stake).sum())
+        results.append(
+            {
+                "band_col": band_col,
+                "band": str(band),
+                "races": int(selected["race_id"].nunique()),
+                "selections": selections,
+                "hits": hits,
+                "hit_rate_pct": None if selections == 0 else hits / selections * 100,
+                "return_min_pct": None if stake_total == 0 else return_min / stake_total * 100,
+                "return_mid_pct": None if stake_total == 0 else return_mid / stake_total * 100,
+                "return_max_pct": None if stake_total == 0 else return_max / stake_total * 100,
+            }
+        )
+
+    return results
+
+
 def evaluate_place_top3_lgbm(
     early_dataset_path: Path,
     late_dataset_path: Path,
@@ -161,6 +196,7 @@ def evaluate_place_top3_lgbm(
     eval_df["expected_value_mid"] = eval_df["pred_top3"] * (
         (eval_df["place_odds_min"] + eval_df["place_odds_max"]) / 2
     )
+    eval_df["place_odds_mid"] = (eval_df["place_odds_min"] + eval_df["place_odds_max"]) / 2
 
     metric_report = {
         "auc": float(roc_auc_score(test_y, pred)),
@@ -187,6 +223,11 @@ def evaluate_place_top3_lgbm(
     threshold_results.extend(_threshold_report(eval_df, "expected_value_min", expected_value_thresholds, stake=stake))
     threshold_results.extend(_threshold_report(eval_df, "expected_value_mid", expected_value_thresholds, stake=stake))
 
+    band_results = []
+    band_results.extend(_band_report(eval_df, "pred_top3", [0, 0.2, 0.3, 0.4, 0.5, 0.6, 1.01], stake=stake))
+    band_results.extend(_band_report(eval_df, "place_odds_mid", [0, 1.5, 2.0, 3.0, 5.0, 10.0, 1000.0], stake=stake))
+    band_results.extend(_band_report(eval_df, "expected_value_mid", [0, 0.7, 0.9, 1.0, 1.1, 1.3, 1000.0], stake=stake))
+
     importance = sorted(
         zip(feature_cols, model.feature_importances_),
         key=lambda x: int(x[1]),
@@ -208,6 +249,7 @@ def evaluate_place_top3_lgbm(
         "metrics": metric_report,
         "strategies": strategy_results,
         "thresholds": threshold_results,
+        "bands": band_results,
         "feature_importance": importance[:15],
     }
 
@@ -255,6 +297,27 @@ def format_lgbm_report(report: dict[str, Any]) -> str:
         max_pct = row["return_max_pct"]
         lines.append(
             f"{row['score']:<19} {row['threshold']:>9.2f}  {row['races']:>5,}  "
+            f"{row['selections']:>10,}  {row['hits']:>4,}  "
+            f"{'n/a' if hit_rate is None else f'{hit_rate:.2f}%':>8}  "
+            f"{'n/a' if min_pct is None else f'{min_pct:.2f}%':>9}  "
+            f"{'n/a' if mid_pct is None else f'{mid_pct:.2f}%':>9}  "
+            f"{'n/a' if max_pct is None else f'{max_pct:.2f}%':>9}"
+        )
+
+    lines.extend(
+        [
+            "",
+            "Band results on test period",
+            "band_col           band             races  selections  hits  hit_rate  return_min  return_mid  return_max",
+        ]
+    )
+    for row in report["bands"]:
+        hit_rate = row["hit_rate_pct"]
+        min_pct = row["return_min_pct"]
+        mid_pct = row["return_mid_pct"]
+        max_pct = row["return_max_pct"]
+        lines.append(
+            f"{row['band_col']:<18} {row['band']:<16} {row['races']:>5,}  "
             f"{row['selections']:>10,}  {row['hits']:>4,}  "
             f"{'n/a' if hit_rate is None else f'{hit_rate:.2f}%':>8}  "
             f"{'n/a' if min_pct is None else f'{min_pct:.2f}%':>9}  "
