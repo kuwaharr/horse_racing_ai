@@ -217,6 +217,14 @@ python scripts\evaluate_fixed_rule_from_predictions.py --engine fastparquet --pr
 
 この条件はwalk-forward 4 foldで119レース、138点、60的中、的中率43.48%、複勝オッズ中間値ベース回収率159.17%でした。より絞るなら開催場`3,7,8,10`除外で82レース、93点、43的中、回収率168.28%でしたが、買い点数が少なくなるため主候補は`3,7,10`除外とします。
 
+保存済み予測から、最低買い点数を指定して候補ルールを一括探索する場合:
+
+```powershell
+python scripts\search_rules_from_predictions.py --engine fastparquet --min-selections 120 --min-fold-selections 20
+```
+
+この設定では、上記の`pred_top3>=0.40`、複勝オッズ中間値`[3.0,5.0)`、距離`[1800,2200)`、開催場`3,7,10`除外が候補内トップでした。
+
 有望な固定ルールを詳細評価する場合:
 
 ```powershell

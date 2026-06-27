@@ -1,0 +1,152 @@
+import argparse
+import sys
+from pathlib import Path
+
+ROOT_DIR = Path(__file__).resolve().parents[1]
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
+from src.data.paths import MODEL_DIR
+from src.models.place_top3_lgbm import _apply_fixed_rule, _selection_summary
+
+
+DEFAULT_PREDICTIONS = MODEL_DIR / "catboost_place_top3_predictions.parquet"
+
+
+def _format_pct(value: float | None) -> str:
+    return "n/a" if value is None else f"{value:.2f}%"
+
+
+def _candidate_rules() -> list[dict]:
+    pred_thresholds = [0.35, 0.4, 0.45, 0.5]
+    odds_ranges = [(2.0, 3.0), (3.0, 5.0), (5.0, 10.0)]
+    distance_ranges = [(None, None), (1400, 1800), (1800, 2200), (2200, None)]
+    track_filters = [
+        ("all", None, None),
+        ("exclude_7_10", None, [7, 10]),
+        ("exclude_3_7_10", None, [3, 7, 10]),
+        ("exclude_3_7_8_10", None, [3, 7, 8, 10]),
+        ("include_4_5_6_9", [4, 5, 6, 9], None),
+        ("include_4_5_6_8_9", [4, 5, 6, 8, 9], None),
+    ]
+    surface_filters = [None, 0, 1]
+
+    candidates = []
+    for pred_min in pred_thresholds:
+        for odds_min, odds_max in odds_ranges:
+            for distance_min, distance_max in distance_ranges:
+                for track_label, include_track_ids, exclude_track_ids in track_filters:
+                    for surface_id in surface_filters:
+                        candidates.append(
+                            {
+                                "pred_min": pred_min,
+                                "odds_min": odds_min,
+                                "odds_max": odds_max,
+                                "distance_min": distance_min,
+                                "distance_max": distance_max,
+                                "track_label": track_label,
+                                "include_track_ids": include_track_ids,
+                                "exclude_track_ids": exclude_track_ids,
+                                "surface_id": surface_id,
+                            }
+                        )
+    return candidates
+
+
+def _rule_key(rule: dict) -> str:
+    distance = f"[{rule['distance_min']},{rule['distance_max']})"
+    surface = "all" if rule["surface_id"] is None else str(rule["surface_id"])
+    return (
+        f"pred>={rule['pred_min']:.2f}|"
+        f"odds=[{rule['odds_min']:.1f},{rule['odds_max']:.1f})|"
+        f"distance={distance}|track={rule['track_label']}|surface={surface}"
+    )
+
+
+def _evaluate_rule(predictions, rule: dict, stake: float, min_fold_selections: int) -> dict | None:
+    selected = _apply_fixed_rule(
+        predictions,
+        pred_min=rule["pred_min"],
+        odds_min=rule["odds_min"],
+        odds_max=rule["odds_max"],
+        distance_min=rule["distance_min"],
+        distance_max=rule["distance_max"],
+        track_id=None,
+        include_track_ids=rule["include_track_ids"],
+        exclude_track_ids=rule["exclude_track_ids"],
+        surface_id=rule["surface_id"],
+    )
+    overall = _selection_summary(selected, stake)
+    fold_returns = []
+    fold_selections = []
+    for _, group in selected.groupby("fold", observed=True):
+        fold_summary = _selection_summary(group, stake)
+        fold_returns.append(fold_summary["return_mid_pct"])
+        fold_selections.append(fold_summary["selections"])
+
+    if len(fold_returns) < predictions["fold"].nunique():
+        return None
+    if min(fold_selections) < min_fold_selections:
+        return None
+
+    result = dict(rule)
+    result.update(overall)
+    result["rule_key"] = _rule_key(rule)
+    result["min_fold_return_mid_pct"] = min(fold_returns)
+    result["max_fold_return_mid_pct"] = max(fold_returns)
+    result["min_fold_selections"] = min(fold_selections)
+    return result
+
+
+def main() -> None:
+    arg_parser = argparse.ArgumentParser()
+    arg_parser.add_argument("--predictions", type=Path, default=DEFAULT_PREDICTIONS)
+    arg_parser.add_argument("--engine", choices=["auto", "pyarrow", "fastparquet"], default="auto")
+    arg_parser.add_argument("--stake", type=float, default=100.0)
+    arg_parser.add_argument("--min-selections", type=int, default=100)
+    arg_parser.add_argument("--min-fold-selections", type=int, default=10)
+    arg_parser.add_argument("--top-n", type=int, default=20)
+    args = arg_parser.parse_args()
+
+    try:
+        import pandas as pd
+    except ModuleNotFoundError as e:
+        raise RuntimeError("保存済み予測のルール探索には pandas が必要です。") from e
+
+    predictions = pd.read_parquet(args.predictions, engine=args.engine)
+    results = []
+    for rule in _candidate_rules():
+        result = _evaluate_rule(predictions, rule, stake=args.stake, min_fold_selections=args.min_fold_selections)
+        if result is None or result["selections"] < args.min_selections:
+            continue
+        results.append(result)
+
+    results = sorted(
+        results,
+        key=lambda row: (
+            row["return_mid_pct"],
+            row["min_fold_return_mid_pct"],
+            row["selections"],
+        ),
+        reverse=True,
+    )
+
+    print(f"Predictions: {args.predictions}")
+    print(f"Rows: {len(predictions):,}")
+    print(f"Races: {int(predictions['race_id'].nunique()):,}")
+    print(f"Min selections: {args.min_selections}")
+    print(f"Min fold selections: {args.min_fold_selections}")
+    print("")
+    print("rule_key                                                        races  selections  hits  hit_rate  return_mid  min_mid  max_mid  min_fold_n")
+    for row in results[: args.top_n]:
+        print(
+            f"{row['rule_key']:<63} "
+            f"{row['races']:>5,}  {row['selections']:>10,}  {row['hits']:>4,}  "
+            f"{_format_pct(row['hit_rate_pct']):>8}  {_format_pct(row['return_mid_pct']):>10}  "
+            f"{_format_pct(row['min_fold_return_mid_pct']):>7}  {_format_pct(row['max_fold_return_mid_pct']):>7}  "
+            f"{row['min_fold_selections']:>10,}"
+        )
+
+
+if __name__ == "__main__":
+    main()
