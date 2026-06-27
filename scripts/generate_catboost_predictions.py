@@ -14,6 +14,12 @@ from src.models.place_top3_catboost import build_catboost_walk_forward_predictio
 DEFAULT_OUTPUT = MODEL_DIR / "catboost_place_top3_predictions.parquet"
 
 
+def _optional_str_list(value: str) -> list[str] | None:
+    if value.lower() in {"none", "null", ""}:
+        return None
+    return [v.strip() for v in value.split(",") if v.strip()]
+
+
 def main() -> None:
     arg_parser = argparse.ArgumentParser()
     arg_parser.add_argument("--training-dataset", type=Path, default=FEAT_DIR / default_training_dataset_name())
@@ -23,6 +29,7 @@ def main() -> None:
     arg_parser.add_argument("--n-splits", type=int, default=4)
     arg_parser.add_argument("--min-train-ratio", type=float, default=0.5)
     arg_parser.add_argument("--stake", type=float, default=100.0)
+    arg_parser.add_argument("--drop-feature-patterns", type=_optional_str_list, default=None)
     args = arg_parser.parse_args()
 
     report = build_catboost_walk_forward_predictions(
@@ -32,6 +39,7 @@ def main() -> None:
         n_splits=args.n_splits,
         min_train_ratio=args.min_train_ratio,
         stake=args.stake,
+        drop_feature_patterns=args.drop_feature_patterns,
     )
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -42,6 +50,7 @@ def main() -> None:
     print(f"Output: {args.output}")
     print(f"Rows: {len(report['predictions']):,}")
     print(f"Folds: {report['n_splits']}")
+    print(f"Dropped features: {len(report['dropped_features'])}")
     print("fold  test_start  test_end    train_rows  test_rows  test_races      AUC  logloss    brier")
     for row in report["folds"]:
         test_end = row["test_end"] or "end"

@@ -36,6 +36,18 @@ CATBOOST_CATEGORICAL_COLUMNS = [
 ]
 
 
+def _drop_feature_patterns(df, patterns: list[str] | None):
+    if not patterns:
+        return df, []
+    protected = set(EXCLUDE_FEATURE_COLUMNS)
+    drop_cols = [
+        col
+        for col in df.columns
+        if col not in protected and any(pattern in col for pattern in patterns)
+    ]
+    return df.drop(columns=drop_cols), drop_cols
+
+
 def _prepare_catboost_features(train_df, test_df):
     feature_cols = [c for c in train_df.columns if c not in EXCLUDE_FEATURE_COLUMNS]
     train_x = train_df[feature_cols].copy()
@@ -220,8 +232,10 @@ def evaluate_fixed_place_top3_catboost_rule_walk_forward(
     include_track_ids: list[int] | None = None,
     exclude_track_ids: list[int] | None = None,
     surface_id: int | None = None,
+    drop_feature_patterns: list[str] | None = None,
 ) -> dict[str, Any]:
     training_df = _read_parquet(training_dataset_path, engine)
+    training_df, dropped_features = _drop_feature_patterns(training_df, drop_feature_patterns)
     odds_df = _read_parquet(odds_dataset_path, engine)
 
     dates = sorted(training_df["date"].dropna().unique())
@@ -300,6 +314,7 @@ def evaluate_fixed_place_top3_catboost_rule_walk_forward(
             "exclude_track_ids": exclude_track_ids,
             "surface_id": surface_id,
         },
+        "dropped_features": dropped_features,
         "overall": overall,
         "folds": fold_reports,
         "by_month": _fixed_rule_breakdown(all_selected, "month", stake),
@@ -315,8 +330,10 @@ def build_catboost_walk_forward_predictions(
     n_splits: int = 4,
     min_train_ratio: float = 0.5,
     stake: float = 100.0,
+    drop_feature_patterns: list[str] | None = None,
 ) -> dict[str, Any]:
     training_df = _read_parquet(training_dataset_path, engine)
+    training_df, dropped_features = _drop_feature_patterns(training_df, drop_feature_patterns)
     odds_df = _read_parquet(odds_dataset_path, engine)
 
     dates = sorted(training_df["date"].dropna().unique())
@@ -366,6 +383,7 @@ def build_catboost_walk_forward_predictions(
         "races": int(training_df["race_id"].nunique()),
         "n_splits": len(fold_reports),
         "min_train_ratio": min_train_ratio,
+        "dropped_features": dropped_features,
         "folds": fold_reports,
         "predictions": predictions,
     }

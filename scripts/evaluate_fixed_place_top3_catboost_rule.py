@@ -24,6 +24,12 @@ def _optional_int_list(value: str) -> list[int] | None:
     return [int(v.strip()) for v in value.split(",") if v.strip()]
 
 
+def _optional_str_list(value: str) -> list[str] | None:
+    if value.lower() in {"none", "null", ""}:
+        return None
+    return [v.strip() for v in value.split(",") if v.strip()]
+
+
 def main() -> None:
     arg_parser = argparse.ArgumentParser()
     arg_parser.add_argument("--training-dataset", type=Path, default=FEAT_DIR / default_training_dataset_name())
@@ -41,6 +47,7 @@ def main() -> None:
     arg_parser.add_argument("--include-track-ids", type=_optional_int_list, default=None)
     arg_parser.add_argument("--exclude-track-ids", type=_optional_int_list, default=None)
     arg_parser.add_argument("--surface-id", type=_optional_int, default=None)
+    arg_parser.add_argument("--drop-feature-patterns", type=_optional_str_list, default=None)
     args = arg_parser.parse_args()
 
     report = evaluate_fixed_place_top3_catboost_rule_walk_forward(
@@ -59,6 +66,7 @@ def main() -> None:
         include_track_ids=args.include_track_ids,
         exclude_track_ids=args.exclude_track_ids,
         surface_id=args.surface_id,
+        drop_feature_patterns=args.drop_feature_patterns,
     )
     print(format_fixed_rule_report(report))
 
