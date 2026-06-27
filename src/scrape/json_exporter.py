@@ -22,7 +22,7 @@ def combine_race_dict(race_info: dict, race_meta: dict) -> dict:
     return race
 
 
-def export_json(race: dict, runners: list, odds: list) -> None:
+def export_json(race: dict, runners: list, odds: dict) -> None:
     data = {
         "race": race,
         "runners": runners,

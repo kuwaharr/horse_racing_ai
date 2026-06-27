@@ -317,6 +317,14 @@ def parse_place(odds_block: dict) -> dict:
     return place
 
 
+def parse_win(odds_block: dict) -> dict:
+    win = {}
+    for key, value in odds_block.items():
+        win[key] = value[0]
+
+    return win
+
+
 def parse_wide(odds_block: dict) -> dict:
     wide = {}
     for key, value in odds_block.items():

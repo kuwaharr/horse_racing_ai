@@ -11,6 +11,7 @@ from src.data.database import (
     upsert_race,
     upsert_runner,
     upsert_trio,
+    upsert_win,
     upsert_wide,
 )
 from src.data.paths import DB_PATH, RAW_DIR
@@ -20,6 +21,7 @@ from src.preprocess.normalizers import (
     normalize_race,
     normalize_runners,
     normalize_trio,
+    normalize_win,
     normalize_wide,
 )
 from src.scrape.extracters import (
@@ -30,6 +32,7 @@ from src.scrape.extracters import (
     parse_place,
     parse_trio,
     parse_url,
+    parse_win,
     parse_wide,
 )
 from src.scrape.fetchers import fetch_odds_jsonp, make_race_url, make_soup
@@ -69,6 +72,7 @@ def run(race_list_url: str, mode: str = "manual", limit: int | None = None) -> N
     current_page = int(qs.get("page", ["1"])[0])
 
     odds_kinds = [
+        ("win", 1, parse_win),
         ("place", 2, parse_place),
         ("wide", 5, parse_wide),
         ("trio", 7, parse_trio),
@@ -177,6 +181,14 @@ def run(race_list_url: str, mode: str = "manual", limit: int | None = None) -> N
                         upsert_runner(cur, runner)
                 else:
                     logger.error("race_id=%s normalize_runners failed %s", race_id, r_normalized_runners.error)
+                    failed = True
+
+                r_normalized_win = normalize_win(race_id, raw_data["odds"]["win"])
+                if r_normalized_win.success:
+                    for odds in r_normalized_win.value:
+                        upsert_win(cur, odds)
+                else:
+                    logger.error("race_id=%s normalize_win failed %s", race_id, r_normalized_win.error)
                     failed = True
 
                 r_normalized_place = normalize_place(race_id, raw_data["odds"]["place"])

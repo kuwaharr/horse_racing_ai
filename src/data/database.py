@@ -52,6 +52,18 @@ def upsert_place(cur: sqlite3.Cursor, odds: dict) -> None:
     cur.execute(sql, [odds[c] for c in cols])
 
 
+def upsert_win(cur: sqlite3.Cursor, odds: dict) -> None:
+    cols = list(odds.keys())
+    set_cols = [c for c in cols if c not in ("race_id", "horse_number")]
+    sql = f"""
+        INSERT INTO win_odds ({", ".join(cols)})
+        VALUES ({", ".join(["?"] * len(cols))})
+        ON CONFLICT(race_id, horse_number) DO UPDATE SET
+            {", ".join([f"{c}=excluded.{c}" for c in set_cols])}
+    """
+    cur.execute(sql, [odds[c] for c in cols])
+
+
 def upsert_wide(cur: sqlite3.Cursor, odds: dict) -> None:
     cols = list(odds.keys())
     set_cols = [c for c in cols if c not in ("race_id", "horse_number_1", "horse_number_2")]

@@ -16,7 +16,7 @@
 
 - レース一覧ページから`race_id`を抽出
 - 各レースの結果ページからレース情報と出走馬情報を取得
-- 複勝、ワイド、3連複のオッズをJSONP APIから取得
+- 単勝、複勝、ワイド、3連複のオッズをJSONP APIから取得
 - 取得データを外部SSDの`D:\horse_racing_ai\data\raw\<race_id>.json`へ保存
 - 正規化したデータをSQLiteの`D:\horse_racing_ai\data\hr.db`へUPSERT
 - ログを`logs/scrape_to_db.log`へ出力
@@ -51,6 +51,7 @@ DBはSQLiteです。スキーマは`schema.sql`に定義されています。
 
 - `race`: レース単位の基本情報
 - `runner`: 各レースの出走馬と結果
+- `win_odds`: 単勝オッズ
 - `place_odds`: 複勝オッズ
 - `wide_odds`: ワイドオッズ
 - `trio_odds`: 3連複オッズ

@@ -61,6 +61,15 @@ CREATE TABLE IF NOT EXISTS place_odds (
     FOREIGN KEY (race_id, horse_number) REFERENCES runner(race_id, horse_number) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS win_odds (
+    race_id TEXT NOT NULL,
+    horse_number INTEGER NOT NULL,
+    odds REAL,
+    CHECK (odds IS NULL OR odds > 0),
+    PRIMARY KEY (race_id, horse_number),
+    FOREIGN KEY (race_id, horse_number) REFERENCES runner(race_id, horse_number) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS wide_odds (
     race_id TEXT NOT NULL,
     horse_number_1 INTEGER NOT NULL,

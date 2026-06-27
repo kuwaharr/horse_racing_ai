@@ -454,6 +454,36 @@ def normalize_place(race_id: str, odds: dict) -> Result[list]:
     return Result(success=True, value=normalized_odds)
 
 
+def normalize_win(race_id: str, odds: dict) -> Result[list]:
+    normalized_odds = []
+    for num, odds in odds.items():
+        normalized_row = {}
+
+        normalized_row["race_id"] = race_id
+
+        try:
+            normalized_row["horse_number"] = int(num)
+        except Exception as e:
+            return Result(
+                success=False,
+                error=f"Invalid horse_number value: {num}\n{e}"
+            )
+        try:
+            if not odds.startswith("-"):
+                odds_val = float(odds.replace(",", ""))
+                normalized_row["odds"] = odds_val if odds_val > 0 else None
+            else:
+                normalized_row["odds"] = None
+        except Exception as e:
+            return Result(
+                success=False,
+                error=f"Invalid odds value: {odds}\n{e}"
+            )
+        normalized_odds.append(normalized_row)
+
+    return Result(success=True, value=normalized_odds)
+
+
 def normalize_wide(race_id: str, odds: dict) -> Result[list]:
     normalized_odds = []
     for nums, odds in odds.items():
