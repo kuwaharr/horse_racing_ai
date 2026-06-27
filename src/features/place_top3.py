@@ -104,12 +104,18 @@ HISTORY_FEATURE_COLUMNS = [
     "horse_track_past_starts",
     "horse_track_past_top3",
     "horse_track_past_top3_rate",
+    "horse_track_past_start_share",
+    "horse_track_past_top3_rate_lift",
     "horse_surface_past_starts",
     "horse_surface_past_top3",
     "horse_surface_past_top3_rate",
+    "horse_surface_past_start_share",
+    "horse_surface_past_top3_rate_lift",
     "horse_distance_band_past_starts",
     "horse_distance_band_past_top3",
     "horse_distance_band_past_top3_rate",
+    "horse_distance_band_past_start_share",
+    "horse_distance_band_past_top3_rate_lift",
     "jockey_past_starts",
     "jockey_past_top3",
     "jockey_past_top3_rate",
@@ -119,12 +125,18 @@ HISTORY_FEATURE_COLUMNS = [
     "jockey_track_past_starts",
     "jockey_track_past_top3",
     "jockey_track_past_top3_rate",
+    "jockey_track_past_start_share",
+    "jockey_track_past_top3_rate_lift",
     "jockey_surface_past_starts",
     "jockey_surface_past_top3",
     "jockey_surface_past_top3_rate",
+    "jockey_surface_past_start_share",
+    "jockey_surface_past_top3_rate_lift",
     "jockey_course_past_starts",
     "jockey_course_past_top3",
     "jockey_course_past_top3_rate",
+    "jockey_course_past_start_share",
+    "jockey_course_past_top3_rate_lift",
     "trainer_past_starts",
     "trainer_past_top3",
     "trainer_past_top3_rate",
@@ -134,12 +146,18 @@ HISTORY_FEATURE_COLUMNS = [
     "trainer_track_past_starts",
     "trainer_track_past_top3",
     "trainer_track_past_top3_rate",
+    "trainer_track_past_start_share",
+    "trainer_track_past_top3_rate_lift",
     "trainer_surface_past_starts",
     "trainer_surface_past_top3",
     "trainer_surface_past_top3_rate",
+    "trainer_surface_past_start_share",
+    "trainer_surface_past_top3_rate_lift",
     "trainer_course_past_starts",
     "trainer_course_past_top3",
     "trainer_course_past_top3_rate",
+    "trainer_course_past_start_share",
+    "trainer_course_past_top3_rate_lift",
     "horse_jockey_past_starts",
     "horse_jockey_past_top3",
     "horse_jockey_past_top3_rate",
@@ -195,10 +213,22 @@ HISTORY_FEATURE_COLUMNS = [
     "race_horse_distance_diff_prev_diff",
     "race_horse_track_past_top3_rate_rank",
     "race_horse_track_past_top3_rate_diff",
+    "race_horse_track_past_start_share_rank",
+    "race_horse_track_past_start_share_diff",
+    "race_horse_track_past_top3_rate_lift_rank",
+    "race_horse_track_past_top3_rate_lift_diff",
     "race_horse_surface_past_top3_rate_rank",
     "race_horse_surface_past_top3_rate_diff",
+    "race_horse_surface_past_start_share_rank",
+    "race_horse_surface_past_start_share_diff",
+    "race_horse_surface_past_top3_rate_lift_rank",
+    "race_horse_surface_past_top3_rate_lift_diff",
     "race_horse_distance_band_past_top3_rate_rank",
     "race_horse_distance_band_past_top3_rate_diff",
+    "race_horse_distance_band_past_start_share_rank",
+    "race_horse_distance_band_past_start_share_diff",
+    "race_horse_distance_band_past_top3_rate_lift_rank",
+    "race_horse_distance_band_past_top3_rate_lift_diff",
     "race_jockey_past_top3_rate_rank",
     "race_jockey_past_top3_rate_diff",
     "race_jockey_past_avg_finish_rank",
@@ -209,10 +239,22 @@ HISTORY_FEATURE_COLUMNS = [
     "race_jockey_recent20_avg_finish_diff",
     "race_jockey_track_past_top3_rate_rank",
     "race_jockey_track_past_top3_rate_diff",
+    "race_jockey_track_past_start_share_rank",
+    "race_jockey_track_past_start_share_diff",
+    "race_jockey_track_past_top3_rate_lift_rank",
+    "race_jockey_track_past_top3_rate_lift_diff",
     "race_jockey_surface_past_top3_rate_rank",
     "race_jockey_surface_past_top3_rate_diff",
+    "race_jockey_surface_past_start_share_rank",
+    "race_jockey_surface_past_start_share_diff",
+    "race_jockey_surface_past_top3_rate_lift_rank",
+    "race_jockey_surface_past_top3_rate_lift_diff",
     "race_jockey_course_past_top3_rate_rank",
     "race_jockey_course_past_top3_rate_diff",
+    "race_jockey_course_past_start_share_rank",
+    "race_jockey_course_past_start_share_diff",
+    "race_jockey_course_past_top3_rate_lift_rank",
+    "race_jockey_course_past_top3_rate_lift_diff",
     "race_trainer_past_top3_rate_rank",
     "race_trainer_past_top3_rate_diff",
     "race_trainer_past_avg_finish_rank",
@@ -223,10 +265,22 @@ HISTORY_FEATURE_COLUMNS = [
     "race_trainer_recent20_avg_finish_diff",
     "race_trainer_track_past_top3_rate_rank",
     "race_trainer_track_past_top3_rate_diff",
+    "race_trainer_track_past_start_share_rank",
+    "race_trainer_track_past_start_share_diff",
+    "race_trainer_track_past_top3_rate_lift_rank",
+    "race_trainer_track_past_top3_rate_lift_diff",
     "race_trainer_surface_past_top3_rate_rank",
     "race_trainer_surface_past_top3_rate_diff",
+    "race_trainer_surface_past_start_share_rank",
+    "race_trainer_surface_past_start_share_diff",
+    "race_trainer_surface_past_top3_rate_lift_rank",
+    "race_trainer_surface_past_top3_rate_lift_diff",
     "race_trainer_course_past_top3_rate_rank",
     "race_trainer_course_past_top3_rate_diff",
+    "race_trainer_course_past_start_share_rank",
+    "race_trainer_course_past_start_share_diff",
+    "race_trainer_course_past_top3_rate_lift_rank",
+    "race_trainer_course_past_top3_rate_lift_diff",
     "race_horse_jockey_past_top3_rate_rank",
     "race_horse_jockey_past_top3_rate_diff",
     "race_jockey_trainer_past_top3_rate_rank",
@@ -428,9 +482,20 @@ def _append_history_features(df):
             ]:
                 starts = item["starts"]
                 top3 = item["top3"]
+                top3_rate = None if starts == 0 else top3 / starts
                 history_row[f"{feature_name}_past_starts"] = starts
                 history_row[f"{feature_name}_past_top3"] = top3
-                history_row[f"{feature_name}_past_top3_rate"] = None if starts == 0 else top3 / starts
+                history_row[f"{feature_name}_past_top3_rate"] = top3_rate
+                owner = _affinity_owner(feature_name)
+                if owner is not None:
+                    owner_starts = history_row[f"{owner}_past_starts"]
+                    owner_top3_rate = history_row[f"{owner}_past_top3_rate"]
+                    history_row[f"{feature_name}_past_start_share"] = (
+                        None if owner_starts == 0 else starts / owner_starts
+                    )
+                    history_row[f"{feature_name}_past_top3_rate_lift"] = (
+                        None if top3_rate is None or owner_top3_rate is None else top3_rate - owner_top3_rate
+                    )
             history_rows.append(history_row)
 
         for _, row in day_df.iterrows():
@@ -539,6 +604,21 @@ def _empty_entity_stat() -> dict:
     }
 
 
+def _affinity_owner(feature_name: str) -> str | None:
+    owner_by_feature = {
+        "horse_track": "horse",
+        "horse_surface": "horse",
+        "horse_distance_band": "horse",
+        "jockey_track": "jockey",
+        "jockey_surface": "jockey",
+        "jockey_course": "jockey",
+        "trainer_track": "trainer",
+        "trainer_surface": "trainer",
+        "trainer_course": "trainer",
+    }
+    return owner_by_feature.get(feature_name)
+
+
 def _recent_top3_rate(rows: list[dict], n: int) -> float | None:
     recent = rows[-n:]
     if not recent:
@@ -606,22 +686,40 @@ def _append_race_relative_features(df):
         ("horse_days_since_last", True),
         ("horse_distance_diff_prev", True),
         ("horse_track_past_top3_rate", False),
+        ("horse_track_past_start_share", False),
+        ("horse_track_past_top3_rate_lift", False),
         ("horse_surface_past_top3_rate", False),
+        ("horse_surface_past_start_share", False),
+        ("horse_surface_past_top3_rate_lift", False),
         ("horse_distance_band_past_top3_rate", False),
+        ("horse_distance_band_past_start_share", False),
+        ("horse_distance_band_past_top3_rate_lift", False),
         ("jockey_past_top3_rate", False),
         ("jockey_past_avg_finish", True),
         ("jockey_recent20_top3_rate", False),
         ("jockey_recent20_avg_finish", True),
         ("jockey_track_past_top3_rate", False),
+        ("jockey_track_past_start_share", False),
+        ("jockey_track_past_top3_rate_lift", False),
         ("jockey_surface_past_top3_rate", False),
+        ("jockey_surface_past_start_share", False),
+        ("jockey_surface_past_top3_rate_lift", False),
         ("jockey_course_past_top3_rate", False),
+        ("jockey_course_past_start_share", False),
+        ("jockey_course_past_top3_rate_lift", False),
         ("trainer_past_top3_rate", False),
         ("trainer_past_avg_finish", True),
         ("trainer_recent20_top3_rate", False),
         ("trainer_recent20_avg_finish", True),
         ("trainer_track_past_top3_rate", False),
+        ("trainer_track_past_start_share", False),
+        ("trainer_track_past_top3_rate_lift", False),
         ("trainer_surface_past_top3_rate", False),
+        ("trainer_surface_past_start_share", False),
+        ("trainer_surface_past_top3_rate_lift", False),
         ("trainer_course_past_top3_rate", False),
+        ("trainer_course_past_start_share", False),
+        ("trainer_course_past_top3_rate_lift", False),
         ("horse_jockey_past_top3_rate", False),
         ("jockey_trainer_past_top3_rate", False),
         ("horse_trainer_past_top3_rate", False),

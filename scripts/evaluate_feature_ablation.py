@@ -25,6 +25,10 @@ ABLATION_GROUPS = {
         "_distance_band_past_",
         "_course_past_",
     ],
+    "affinity_lift": [
+        "_past_start_share",
+        "_past_top3_rate_lift",
+    ],
     "connection_affinity": [
         "horse_jockey_",
         "jockey_trainer_",
