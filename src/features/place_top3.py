@@ -85,6 +85,14 @@ HISTORY_FEATURE_COLUMNS = [
     "horse_past_top3",
     "horse_past_top3_rate",
     "horse_past_avg_finish",
+    "horse_past_avg_distance",
+    "horse_distance_diff_avg",
+    "horse_past_min_distance",
+    "horse_past_max_distance",
+    "horse_distance_above_max",
+    "horse_distance_below_min",
+    "horse_past_avg_weight",
+    "horse_weight_diff_avg",
     "horse_recent3_top3_rate",
     "horse_recent3_avg_finish",
     "horse_recent5_top3_rate",
@@ -129,6 +137,14 @@ HISTORY_FEATURE_COLUMNS = [
     "race_horse_past_top3_rate_diff",
     "race_horse_past_avg_finish_rank",
     "race_horse_past_avg_finish_diff",
+    "race_horse_distance_diff_avg_rank",
+    "race_horse_distance_diff_avg_diff",
+    "race_horse_distance_above_max_rank",
+    "race_horse_distance_above_max_diff",
+    "race_horse_distance_below_min_rank",
+    "race_horse_distance_below_min_diff",
+    "race_horse_weight_diff_avg_rank",
+    "race_horse_weight_diff_avg_diff",
     "race_horse_recent3_top3_rate_rank",
     "race_horse_recent3_top3_rate_diff",
     "race_horse_recent3_avg_finish_rank",
@@ -236,7 +252,7 @@ def _append_history_features(df):
         ("trainer", "trainer_id"),
     ]
     stats = {
-        name: defaultdict(lambda: {"starts": 0, "top3": 0, "finish_sum": 0.0})
+        name: defaultdict(_empty_entity_stat)
         for name, _ in entity_specs
     }
     horse_track_stats = defaultdict(_empty_history_stat)
@@ -272,6 +288,22 @@ def _append_history_features(df):
                 history_row[f"{name}_past_avg_finish"] = None if starts == 0 else finish_sum / starts
                 recent = recent_history[name][value]
                 if name == "horse":
+                    avg_distance = None if starts == 0 else item["distance_sum"] / starts
+                    avg_weight = None if starts == 0 else item["weight_sum"] / starts
+                    min_distance = item["min_distance"]
+                    max_distance = item["max_distance"]
+                    history_row["horse_past_avg_distance"] = avg_distance
+                    history_row["horse_distance_diff_avg"] = None if avg_distance is None else row["distance"] - avg_distance
+                    history_row["horse_past_min_distance"] = min_distance
+                    history_row["horse_past_max_distance"] = max_distance
+                    history_row["horse_distance_above_max"] = (
+                        None if max_distance is None else max(0, row["distance"] - max_distance)
+                    )
+                    history_row["horse_distance_below_min"] = (
+                        None if min_distance is None else max(0, min_distance - row["distance"])
+                    )
+                    history_row["horse_past_avg_weight"] = avg_weight
+                    history_row["horse_weight_diff_avg"] = None if avg_weight is None else row["weight"] - avg_weight
                     history_row["horse_recent3_top3_rate"] = _recent_top3_rate(recent, 3)
                     history_row["horse_recent3_avg_finish"] = _recent_avg_finish(recent, 3)
                     history_row["horse_recent5_top3_rate"] = _recent_top3_rate(recent, 5)
@@ -319,6 +351,19 @@ def _append_history_features(df):
                 item["starts"] += 1
                 item["top3"] += target
                 item["finish_sum"] += finish
+                if name == "horse":
+                    item["distance_sum"] += float(row["distance"])
+                    item["weight_sum"] += float(row["weight"])
+                    item["min_distance"] = (
+                        int(row["distance"])
+                        if item["min_distance"] is None
+                        else min(item["min_distance"], int(row["distance"]))
+                    )
+                    item["max_distance"] = (
+                        int(row["distance"])
+                        if item["max_distance"] is None
+                        else max(item["max_distance"], int(row["distance"]))
+                    )
                 recent_history[name][row[id_col]].append({"top3": target, "finish": finish})
             horse_last_seen[row["horse_id"]] = (row["date_obj"], int(row["distance"]))
             for item in [
@@ -346,6 +391,18 @@ def _append_history_features(df):
 
 def _empty_history_stat() -> dict:
     return {"starts": 0, "top3": 0}
+
+
+def _empty_entity_stat() -> dict:
+    return {
+        "starts": 0,
+        "top3": 0,
+        "finish_sum": 0.0,
+        "distance_sum": 0.0,
+        "weight_sum": 0.0,
+        "min_distance": None,
+        "max_distance": None,
+    }
 
 
 def _recent_top3_rate(rows: list[dict], n: int) -> float | None:
@@ -376,6 +433,10 @@ def _append_race_relative_features(df):
     relative_specs = [
         ("horse_past_top3_rate", False),
         ("horse_past_avg_finish", True),
+        ("horse_distance_diff_avg", True),
+        ("horse_distance_above_max", True),
+        ("horse_distance_below_min", True),
+        ("horse_weight_diff_avg", True),
         ("horse_recent3_top3_rate", False),
         ("horse_recent3_avg_finish", True),
         ("horse_days_since_last", True),

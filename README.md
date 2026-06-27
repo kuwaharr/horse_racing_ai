@@ -144,7 +144,7 @@ python scripts\build_place_top3_dataset.py --mode early --engine fastparquet --h
 ```
 
 この場合のデフォルト出力先は`D:\horse_racing_ai\data\feature\place_top3_early_history_dataset.parquet`です。
-過去成績特徴量には、馬・騎手・調教師の過去成績、馬や騎手の競馬場/芝ダート/距離帯別成績、直近フォーム、前走からの日数・距離変化、同一レース内での過去成績順位や平均との差分が含まれます。
+過去成績特徴量には、馬・騎手・調教師の過去成績、馬や騎手の競馬場/芝ダート/距離帯別成績、直近フォーム、前走からの日数・距離変化、過去平均との差による距離・斤量適性、同一レース内での過去成績順位や平均との差分が含まれます。
 
 出力先を指定する場合:
 
