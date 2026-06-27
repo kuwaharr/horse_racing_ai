@@ -42,6 +42,15 @@ def _split_by_start_date(df, test_start_date: str, test_end_date: str | None = N
     return train_df, test_df
 
 
+def _filter_by_distance(df, distance_min: int | None, distance_max: int | None):
+    filtered = df
+    if distance_min is not None:
+        filtered = filtered[filtered["distance"] >= distance_min]
+    if distance_max is not None:
+        filtered = filtered[filtered["distance"] < distance_max]
+    return filtered.copy()
+
+
 def _prepare_features(train_df, test_df):
     feature_cols = [c for c in train_df.columns if c not in EXCLUDE_FEATURE_COLUMNS]
 
@@ -608,6 +617,8 @@ def evaluate_fixed_place_top3_rule_walk_forward(
     include_track_ids: list[int] | None = None,
     exclude_track_ids: list[int] | None = None,
     surface_id: int | None = None,
+    train_distance_min: int | None = None,
+    train_distance_max: int | None = None,
 ) -> dict[str, Any]:
     training_df = _read_parquet(training_dataset_path, engine)
     odds_df = _read_parquet(odds_dataset_path, engine)
@@ -619,6 +630,12 @@ def evaluate_fixed_place_top3_rule_walk_forward(
     selected_rows = []
     for fold_idx, (test_start, test_end) in enumerate(splits, start=1):
         train_df, test_df = _split_by_start_date(training_df, test_start, test_end)
+        train_df = _filter_by_distance(train_df, train_distance_min, train_distance_max)
+        if train_df.empty:
+            raise ValueError(
+                f"No training rows after train distance filter: "
+                f"min={train_distance_min}, max={train_distance_max}"
+            )
         split_report = _fit_and_evaluate_split(
             train_df=train_df,
             test_df=test_df,
@@ -651,6 +668,8 @@ def evaluate_fixed_place_top3_rule_walk_forward(
                 "fold": fold_idx,
                 "test_start": test_start,
                 "test_end": test_end,
+                "train_rows": len(train_df),
+                "train_races": int(train_df["race_id"].nunique()),
                 "auc": split_report["metrics"]["auc"],
                 "logloss": split_report["metrics"]["logloss"],
                 "brier": split_report["metrics"]["brier"],
@@ -673,6 +692,10 @@ def evaluate_fixed_place_top3_rule_walk_forward(
         "races": int(training_df["race_id"].nunique()),
         "n_splits": len(fold_reports),
         "min_train_ratio": min_train_ratio,
+        "train_filter": {
+            "distance_min": train_distance_min,
+            "distance_max": train_distance_max,
+        },
         "rule": {
             "pred_min": pred_min,
             "odds_min": odds_min,
@@ -694,6 +717,12 @@ def evaluate_fixed_place_top3_rule_walk_forward(
 
 def format_fixed_rule_report(report: dict[str, Any]) -> str:
     rule = report["rule"]
+    train_filter = report["train_filter"]
+    train_distance = (
+        "none"
+        if train_filter["distance_min"] is None and train_filter["distance_max"] is None
+        else f"distance=[{train_filter['distance_min']},{train_filter['distance_max']})"
+    )
     overall = report["overall"]
     lines = [
         f"Training dataset: {report['training_dataset_path']}",
@@ -701,6 +730,7 @@ def format_fixed_rule_report(report: dict[str, Any]) -> str:
         f"Rows: {report['rows']:,}",
         f"Races: {report['races']:,}",
         f"Folds: {report['n_splits']}",
+        f"Train filter: {train_distance}",
         (
             "Rule: "
             f"pred_top3>={rule['pred_min']:.2f}, "
@@ -721,12 +751,13 @@ def format_fixed_rule_report(report: dict[str, Any]) -> str:
         ),
         "",
         "Fold results",
-        "fold  test_start  test_end    selections  hits  hit_rate  return_min  return_mid  return_max",
+        "fold  test_start  test_end    train_rows  selections  hits  hit_rate  return_min  return_mid  return_max",
     ]
     for row in report["folds"]:
         test_end = row["test_end"] or "end"
         lines.append(
             f"{row['fold']:>4}  {row['test_start']}  {test_end:<10}  "
+            f"{row['train_rows']:>10,}  "
             f"{row['selections']:>10,}  {row['hits']:>4,}  "
             f"{row['hit_rate_pct']:>7.2f}%  {row['return_min_pct']:>9.2f}%  "
             f"{row['return_mid_pct']:>9.2f}%  {row['return_max_pct']:>9.2f}%"

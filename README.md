@@ -198,6 +198,12 @@ python scripts\evaluate_fixed_place_top3_rule.py --engine fastparquet
 python scripts\evaluate_fixed_place_top3_rule.py --engine fastparquet --exclude-track-ids "3,6,10"
 ```
 
+学習対象の距離帯だけを絞って、特定条件向けの専門モデルを検証する場合:
+
+```powershell
+python scripts\evaluate_fixed_place_top3_rule.py --engine fastparquet --pred-min 0.40 --train-distance-min 1800 --train-distance-max 2200
+```
+
 ## 実装メモ
 
 - パス定義は`src/data/paths.py`にあります
@@ -217,7 +223,6 @@ python scripts\evaluate_fixed_place_top3_rule.py --engine fastparquet --exclude-
 - 学習・評価パイプラインの再構築
 - 複勝の3着内確率予測
 - ワイド、3連複への拡張
-- EARLY/LATEモードの整理
 - 日付単位の予測出力
 - 推奨結果のファイル出力
 

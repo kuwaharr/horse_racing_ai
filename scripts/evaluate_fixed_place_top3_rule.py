@@ -40,6 +40,8 @@ def main() -> None:
     arg_parser.add_argument("--include-track-ids", type=_optional_int_list, default=None)
     arg_parser.add_argument("--exclude-track-ids", type=_optional_int_list, default=None)
     arg_parser.add_argument("--surface-id", type=_optional_int, default=None)
+    arg_parser.add_argument("--train-distance-min", type=_optional_int, default=None)
+    arg_parser.add_argument("--train-distance-max", type=_optional_int, default=None)
     args = arg_parser.parse_args()
 
     report = evaluate_fixed_place_top3_rule_walk_forward(
@@ -58,6 +60,8 @@ def main() -> None:
         include_track_ids=args.include_track_ids,
         exclude_track_ids=args.exclude_track_ids,
         surface_id=args.surface_id,
+        train_distance_min=args.train_distance_min,
+        train_distance_max=args.train_distance_max,
     )
     print(format_fixed_rule_report(report))
 
