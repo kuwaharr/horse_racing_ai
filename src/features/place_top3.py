@@ -2,10 +2,80 @@ import sqlite3
 from pathlib import Path
 
 
-DEFAULT_DATASET_NAME = "place_top3_dataset.parquet"
+DEFAULT_DATASET_NAMES = {
+    "early": "place_top3_early_dataset.parquet",
+    "late": "place_top3_late_dataset.parquet",
+}
 
 
-PLACE_TOP3_QUERY = """
+LATE_FEATURE_COLUMNS = [
+    "race_id",
+    "date",
+    "track_id",
+    "race_number",
+    "post_time_min",
+    "surface_id",
+    "distance",
+    "course_direction_id",
+    "course_layout_id",
+    "course_variant_id",
+    "weather_id",
+    "track_condition_id",
+    "race_size",
+    "gate",
+    "horse_number",
+    "horse_id",
+    "horse_name",
+    "sex_id",
+    "age",
+    "jockey_id",
+    "weight",
+    "popularity",
+    "stable_id",
+    "trainer_id",
+    "horse_weight",
+    "horse_weight_diff",
+    "place_odds_min",
+    "place_odds_max",
+    "target_top3",
+]
+
+
+EARLY_FEATURE_COLUMNS = [
+    "race_id",
+    "date",
+    "track_id",
+    "race_number",
+    "post_time_min",
+    "surface_id",
+    "distance",
+    "course_direction_id",
+    "course_layout_id",
+    "course_variant_id",
+    "weather_id",
+    "track_condition_id",
+    "race_size",
+    "gate",
+    "horse_number",
+    "horse_id",
+    "horse_name",
+    "sex_id",
+    "age",
+    "jockey_id",
+    "weight",
+    "stable_id",
+    "trainer_id",
+    "target_top3",
+]
+
+
+FEATURE_COLUMNS_BY_MODE = {
+    "early": EARLY_FEATURE_COLUMNS,
+    "late": LATE_FEATURE_COLUMNS,
+}
+
+
+PLACE_TOP3_BASE_QUERY = """
 SELECT
     ra.race_id,
     ra.date,
@@ -48,7 +118,16 @@ ORDER BY ra.date, ra.race_id, ru.horse_number
 """
 
 
-def build_place_top3_dataset(db_path: Path, output_path: Path, engine: str = "auto") -> int:
+def default_dataset_name(mode: str) -> str:
+    if mode not in DEFAULT_DATASET_NAMES:
+        raise ValueError(f"Unknown dataset mode: {mode}")
+    return DEFAULT_DATASET_NAMES[mode]
+
+
+def build_place_top3_dataset(db_path: Path, output_path: Path, mode: str = "late", engine: str = "auto") -> int:
+    if mode not in FEATURE_COLUMNS_BY_MODE:
+        raise ValueError(f"Unknown dataset mode: {mode}")
+
     try:
         import pandas as pd
     except ModuleNotFoundError as e:
@@ -60,7 +139,9 @@ def build_place_top3_dataset(db_path: Path, output_path: Path, engine: str = "au
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     with sqlite3.connect(db_path) as conn:
-        df = pd.read_sql_query(PLACE_TOP3_QUERY, conn)
+        df = pd.read_sql_query(PLACE_TOP3_BASE_QUERY, conn)
+
+    df = df[FEATURE_COLUMNS_BY_MODE[mode]]
 
     try:
         df.to_parquet(output_path, index=False, engine=engine)

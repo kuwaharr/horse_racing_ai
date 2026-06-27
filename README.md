@@ -128,26 +128,30 @@ python scripts\check_db_quality.py --db "D:\horse_racing_ai\data\hr.db"
 複勝3着内予測用の学習データセットをParquetで作成する場合:
 
 ```powershell
-python scripts\build_place_top3_dataset.py
+python scripts\build_place_top3_dataset.py --mode late --engine fastparquet
 ```
 
-`fastparquet`を使う場合:
+早期予測用データセットを作成する場合:
 
 ```powershell
-python scripts\build_place_top3_dataset.py --engine fastparquet
+python scripts\build_place_top3_dataset.py --mode early --engine fastparquet
 ```
 
 出力先を指定する場合:
 
 ```powershell
-python scripts\build_place_top3_dataset.py --output "D:\horse_racing_ai\data\feature\place_top3_dataset.parquet"
+python scripts\build_place_top3_dataset.py --mode late --engine fastparquet --output "D:\horse_racing_ai\data\feature\place_top3_late_dataset.parquet"
 ```
+
+`early`は人気、オッズ、馬体重を含めません。`late`は直前予測用として人気、複勝オッズ、馬体重を含めます。
 
 人気順・複勝オッズ順のベースラインを評価する場合:
 
 ```powershell
 python scripts\evaluate_baselines.py --engine fastparquet
 ```
+
+このベースライン評価は、人気と複勝オッズを使うため`late`データセット向けです。
 
 ## 実装メモ
 
