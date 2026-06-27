@@ -182,6 +182,12 @@ python scripts\evaluate_place_top3_lgbm.py --engine fastparquet --pred-threshold
 python scripts\evaluate_place_top3_lgbm.py --engine fastparquet --min-rule-selections 100
 ```
 
+複数の時系列foldでルールの安定性を確認する場合:
+
+```powershell
+python scripts\evaluate_place_top3_walk_forward.py --engine fastparquet
+```
+
 ## 実装メモ
 
 - パス定義は`src/data/paths.py`にあります

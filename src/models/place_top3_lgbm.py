@@ -29,6 +29,19 @@ def _split_by_date(df, test_ratio: float):
     return train_df, test_df, split_date
 
 
+def _split_by_start_date(df, test_start_date: str, test_end_date: str | None = None):
+    train_df = df[df["date"] < test_start_date].copy()
+    if test_end_date is None:
+        test_df = df[df["date"] >= test_start_date].copy()
+    else:
+        test_df = df[(df["date"] >= test_start_date) & (df["date"] < test_end_date)].copy()
+
+    if train_df.empty or test_df.empty:
+        raise ValueError(f"Invalid split: start={test_start_date}, end={test_end_date}")
+
+    return train_df, test_df
+
+
 def _prepare_features(train_df, test_df):
     feature_cols = [c for c in train_df.columns if c not in EXCLUDE_FEATURE_COLUMNS]
 
@@ -192,6 +205,7 @@ def _rule_grid_report(
                     "pred_min": pred_min,
                     "odds_min": odds_min,
                     "odds_max": odds_max,
+                    "rule_key": f"pred>={pred_min:.2f}|odds=[{odds_min:.1f},{odds_max:.1f})",
                 }
             )
             results.append(summary)
@@ -206,15 +220,14 @@ def _rule_grid_report(
     )
 
 
-def evaluate_place_top3_lgbm(
-    early_dataset_path: Path,
-    late_dataset_path: Path,
-    engine: str = "auto",
-    test_ratio: float = 0.2,
-    stake: float = 100.0,
-    pred_thresholds: list[float] | None = None,
-    expected_value_thresholds: list[float] | None = None,
-    min_rule_selections: int = 100,
+def _fit_and_evaluate_split(
+    train_df,
+    test_df,
+    late_df,
+    stake: float,
+    pred_thresholds: list[float] | None,
+    expected_value_thresholds: list[float] | None,
+    min_rule_selections: int,
 ) -> dict[str, Any]:
     try:
         from lightgbm import LGBMClassifier
@@ -222,10 +235,6 @@ def evaluate_place_top3_lgbm(
     except ModuleNotFoundError as e:
         raise RuntimeError("LightGBM評価には lightgbm と scikit-learn が必要です。") from e
 
-    early_df = _read_parquet(early_dataset_path, engine)
-    late_df = _read_parquet(late_dataset_path, engine)
-
-    train_df, test_df, split_date = _split_by_date(early_df, test_ratio)
     train_x, test_x, feature_cols, categorical_cols = _prepare_features(train_df, test_df)
     train_y = train_df["target_top3"]
     test_y = test_df["target_top3"]
@@ -302,6 +311,47 @@ def evaluate_place_top3_lgbm(
     )
 
     return {
+        "features": feature_cols,
+        "categorical_features": categorical_cols,
+        "metrics": metric_report,
+        "strategies": strategy_results,
+        "thresholds": threshold_results,
+        "bands": band_results,
+        "rule_grid": rule_grid_results,
+        "feature_importance": importance[:15],
+    }
+
+
+def evaluate_place_top3_lgbm(
+    early_dataset_path: Path,
+    late_dataset_path: Path,
+    engine: str = "auto",
+    test_ratio: float = 0.2,
+    stake: float = 100.0,
+    pred_thresholds: list[float] | None = None,
+    expected_value_thresholds: list[float] | None = None,
+    min_rule_selections: int = 100,
+) -> dict[str, Any]:
+    try:
+        from sklearn.metrics import roc_auc_score
+    except ModuleNotFoundError as e:
+        raise RuntimeError("LightGBM評価には scikit-learn が必要です。") from e
+
+    early_df = _read_parquet(early_dataset_path, engine)
+    late_df = _read_parquet(late_dataset_path, engine)
+
+    train_df, test_df, split_date = _split_by_date(early_df, test_ratio)
+    split_report = _fit_and_evaluate_split(
+        train_df=train_df,
+        test_df=test_df,
+        late_df=late_df,
+        stake=stake,
+        pred_thresholds=pred_thresholds,
+        expected_value_thresholds=expected_value_thresholds,
+        min_rule_selections=min_rule_selections,
+    )
+
+    return {
         "early_dataset_path": str(early_dataset_path),
         "late_dataset_path": str(late_dataset_path),
         "rows": len(early_df),
@@ -311,16 +361,188 @@ def evaluate_place_top3_lgbm(
         "test_rows": len(test_df),
         "test_races": int(test_df["race_id"].nunique()),
         "split_date": split_date,
-        "features": feature_cols,
-        "categorical_features": categorical_cols,
-        "metrics": metric_report,
-        "strategies": strategy_results,
-        "thresholds": threshold_results,
-        "bands": band_results,
-        "rule_grid": rule_grid_results[:20],
+        "features": split_report["features"],
+        "categorical_features": split_report["categorical_features"],
+        "metrics": split_report["metrics"],
+        "strategies": split_report["strategies"],
+        "thresholds": split_report["thresholds"],
+        "bands": split_report["bands"],
+        "rule_grid": split_report["rule_grid"][:20],
         "min_rule_selections": min_rule_selections,
-        "feature_importance": importance[:15],
+        "feature_importance": split_report["feature_importance"],
     }
+
+
+def _make_walk_forward_splits(dates: list[str], n_splits: int, min_train_ratio: float) -> list[tuple[str, str | None]]:
+    if n_splits < 1:
+        raise ValueError("n_splits must be at least 1")
+    if not 0 < min_train_ratio < 1:
+        raise ValueError("min_train_ratio must be between 0 and 1")
+
+    min_idx = int(len(dates) * min_train_ratio)
+    if min_idx >= len(dates) - 1:
+        raise ValueError("Not enough dates after min_train_ratio")
+
+    remaining = len(dates) - min_idx
+    step = max(1, remaining // n_splits)
+
+    splits = []
+    for i in range(n_splits):
+        start_idx = min_idx + i * step
+        if start_idx >= len(dates) - 1:
+            break
+        end_idx = min_idx + (i + 1) * step
+        test_start = dates[start_idx]
+        test_end = dates[end_idx] if i < n_splits - 1 and end_idx < len(dates) else None
+        splits.append((test_start, test_end))
+
+    return splits
+
+
+def evaluate_place_top3_lgbm_walk_forward(
+    early_dataset_path: Path,
+    late_dataset_path: Path,
+    engine: str = "auto",
+    n_splits: int = 4,
+    min_train_ratio: float = 0.5,
+    stake: float = 100.0,
+    min_rule_selections: int = 30,
+) -> dict[str, Any]:
+    early_df = _read_parquet(early_dataset_path, engine)
+    late_df = _read_parquet(late_dataset_path, engine)
+
+    dates = sorted(early_df["date"].dropna().unique())
+    splits = _make_walk_forward_splits(dates, n_splits=n_splits, min_train_ratio=min_train_ratio)
+
+    fold_reports = []
+    rule_rows = []
+    for fold_idx, (test_start, test_end) in enumerate(splits, start=1):
+        train_df, test_df = _split_by_start_date(early_df, test_start, test_end)
+        split_report = _fit_and_evaluate_split(
+            train_df=train_df,
+            test_df=test_df,
+            late_df=late_df,
+            stake=stake,
+            pred_thresholds=None,
+            expected_value_thresholds=None,
+            min_rule_selections=min_rule_selections,
+        )
+
+        fold_summary = {
+            "fold": fold_idx,
+            "test_start": test_start,
+            "test_end": test_end,
+            "train_rows": len(train_df),
+            "train_races": int(train_df["race_id"].nunique()),
+            "test_rows": len(test_df),
+            "test_races": int(test_df["race_id"].nunique()),
+            "auc": split_report["metrics"]["auc"],
+            "logloss": split_report["metrics"]["logloss"],
+            "brier": split_report["metrics"]["brier"],
+        }
+        fold_reports.append(fold_summary)
+
+        for row in split_report["rule_grid"]:
+            rule_row = dict(row)
+            rule_row["fold"] = fold_idx
+            rule_row["test_start"] = test_start
+            rule_row["test_end"] = test_end
+            rule_rows.append(rule_row)
+
+    rule_summary = _summarize_rules(rule_rows, n_folds=len(fold_reports))
+
+    return {
+        "early_dataset_path": str(early_dataset_path),
+        "late_dataset_path": str(late_dataset_path),
+        "rows": len(early_df),
+        "races": int(early_df["race_id"].nunique()),
+        "n_splits": len(fold_reports),
+        "min_train_ratio": min_train_ratio,
+        "min_rule_selections": min_rule_selections,
+        "folds": fold_reports,
+        "rule_summary": rule_summary[:20],
+    }
+
+
+def _summarize_rules(rule_rows: list[dict[str, Any]], n_folds: int) -> list[dict[str, Any]]:
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for row in rule_rows:
+        grouped.setdefault(row["rule_key"], []).append(row)
+
+    summaries = []
+    for rule_key, rows in grouped.items():
+        selections = sum(row["selections"] for row in rows)
+        hits = sum(row["hits"] for row in rows)
+        stake_proxy = selections
+        # Percent returns are weighted by selections, equivalent to aggregating stake-normalized returns.
+        return_min = sum(row["return_min_pct"] * row["selections"] for row in rows) / stake_proxy
+        return_mid = sum(row["return_mid_pct"] * row["selections"] for row in rows) / stake_proxy
+        return_max = sum(row["return_max_pct"] * row["selections"] for row in rows) / stake_proxy
+        summaries.append(
+            {
+                "rule_key": rule_key,
+                "folds_hit": len(rows),
+                "folds_total": n_folds,
+                "selections": selections,
+                "hits": hits,
+                "hit_rate_pct": None if selections == 0 else hits / selections * 100,
+                "return_min_pct": return_min,
+                "return_mid_pct": return_mid,
+                "return_max_pct": return_max,
+                "min_fold_return_mid_pct": min(row["return_mid_pct"] for row in rows),
+                "max_fold_return_mid_pct": max(row["return_mid_pct"] for row in rows),
+            }
+        )
+
+    return sorted(
+        summaries,
+        key=lambda row: (
+            row["folds_hit"] == row["folds_total"],
+            row["return_mid_pct"],
+            row["selections"],
+        ),
+        reverse=True,
+    )
+
+
+def format_walk_forward_report(report: dict[str, Any]) -> str:
+    lines = [
+        f"Early dataset: {report['early_dataset_path']}",
+        f"Late odds dataset: {report['late_dataset_path']}",
+        f"Rows: {report['rows']:,}",
+        f"Races: {report['races']:,}",
+        f"Folds: {report['n_splits']}",
+        f"Min train ratio: {report['min_train_ratio']:.2f}",
+        "",
+        "Fold metrics",
+        "fold  test_start  test_end    train_rows  test_rows  test_races      AUC  logloss    brier",
+    ]
+
+    for row in report["folds"]:
+        test_end = row["test_end"] or "end"
+        lines.append(
+            f"{row['fold']:>4}  {row['test_start']}  {test_end:<10}  "
+            f"{row['train_rows']:>10,}  {row['test_rows']:>9,}  {row['test_races']:>10,}  "
+            f"{row['auc']:>7.5f}  {row['logloss']:>7.5f}  {row['brier']:>7.5f}"
+        )
+
+    lines.extend(
+        [
+            "",
+            f"Rule stability summary (min selections per fold: {report['min_rule_selections']})",
+            "rule_key                       folds  selections  hits  hit_rate  return_min  return_mid  return_max  min_mid  max_mid",
+        ]
+    )
+    for row in report["rule_summary"]:
+        lines.append(
+            f"{row['rule_key']:<30} {row['folds_hit']:>2}/{row['folds_total']:<2}  "
+            f"{row['selections']:>10,}  {row['hits']:>4,}  "
+            f"{row['hit_rate_pct']:>7.2f}%  {row['return_min_pct']:>9.2f}%  "
+            f"{row['return_mid_pct']:>9.2f}%  {row['return_max_pct']:>9.2f}%  "
+            f"{row['min_fold_return_mid_pct']:>7.2f}%  {row['max_fold_return_mid_pct']:>7.2f}%"
+        )
+
+    return "\n".join(lines)
 
 
 def format_lgbm_report(report: dict[str, Any]) -> str:
