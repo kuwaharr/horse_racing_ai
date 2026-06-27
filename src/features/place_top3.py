@@ -83,12 +83,70 @@ HISTORY_FEATURE_COLUMNS = [
     "horse_past_starts",
     "horse_past_top3",
     "horse_past_top3_rate",
+    "horse_past_avg_finish",
+    "horse_track_past_starts",
+    "horse_track_past_top3",
+    "horse_track_past_top3_rate",
+    "horse_surface_past_starts",
+    "horse_surface_past_top3",
+    "horse_surface_past_top3_rate",
+    "horse_distance_band_past_starts",
+    "horse_distance_band_past_top3",
+    "horse_distance_band_past_top3_rate",
     "jockey_past_starts",
     "jockey_past_top3",
     "jockey_past_top3_rate",
+    "jockey_past_avg_finish",
+    "jockey_track_past_starts",
+    "jockey_track_past_top3",
+    "jockey_track_past_top3_rate",
+    "jockey_surface_past_starts",
+    "jockey_surface_past_top3",
+    "jockey_surface_past_top3_rate",
     "trainer_past_starts",
     "trainer_past_top3",
     "trainer_past_top3_rate",
+    "trainer_past_avg_finish",
+    "trainer_track_past_starts",
+    "trainer_track_past_top3",
+    "trainer_track_past_top3_rate",
+    "trainer_surface_past_starts",
+    "trainer_surface_past_top3",
+    "trainer_surface_past_top3_rate",
+    "race_horse_past_top3_rate_rank",
+    "race_horse_past_top3_rate_diff",
+    "race_horse_past_avg_finish_rank",
+    "race_horse_past_avg_finish_diff",
+    "race_horse_track_past_top3_rate_rank",
+    "race_horse_track_past_top3_rate_diff",
+    "race_horse_surface_past_top3_rate_rank",
+    "race_horse_surface_past_top3_rate_diff",
+    "race_horse_distance_band_past_top3_rate_rank",
+    "race_horse_distance_band_past_top3_rate_diff",
+    "race_jockey_past_top3_rate_rank",
+    "race_jockey_past_top3_rate_diff",
+    "race_jockey_past_avg_finish_rank",
+    "race_jockey_past_avg_finish_diff",
+    "race_jockey_track_past_top3_rate_rank",
+    "race_jockey_track_past_top3_rate_diff",
+    "race_jockey_surface_past_top3_rate_rank",
+    "race_jockey_surface_past_top3_rate_diff",
+    "race_trainer_past_top3_rate_rank",
+    "race_trainer_past_top3_rate_diff",
+    "race_trainer_past_avg_finish_rank",
+    "race_trainer_past_avg_finish_diff",
+    "race_trainer_track_past_top3_rate_rank",
+    "race_trainer_track_past_top3_rate_diff",
+    "race_trainer_surface_past_top3_rate_rank",
+    "race_trainer_surface_past_top3_rate_diff",
+    "race_gate_rank",
+    "race_gate_diff",
+    "race_horse_number_rank",
+    "race_horse_number_diff",
+    "race_weight_rank",
+    "race_weight_diff",
+    "race_age_rank",
+    "race_age_diff",
 ]
 
 
@@ -120,6 +178,7 @@ SELECT
     ru.trainer_id,
     ru.horse_weight,
     ru.horse_weight_diff,
+    ru.finish AS finish_position,
     po.odds_min AS place_odds_min,
     po.odds_max AS place_odds_max,
     CASE WHEN ru.finish <= 3 THEN 1 ELSE 0 END AS target_top3
@@ -149,11 +208,19 @@ def _append_history_features(df):
         ("trainer", "trainer_id"),
     ]
     stats = {
-        name: defaultdict(lambda: {"starts": 0, "top3": 0})
+        name: defaultdict(lambda: {"starts": 0, "top3": 0, "finish_sum": 0.0})
         for name, _ in entity_specs
     }
+    horse_track_stats = defaultdict(_empty_history_stat)
+    horse_surface_stats = defaultdict(_empty_history_stat)
+    horse_distance_band_stats = defaultdict(_empty_history_stat)
+    jockey_track_stats = defaultdict(_empty_history_stat)
+    jockey_surface_stats = defaultdict(_empty_history_stat)
+    trainer_track_stats = defaultdict(_empty_history_stat)
+    trainer_surface_stats = defaultdict(_empty_history_stat)
 
     df = df.sort_values(["date", "race_id", "horse_number"]).copy()
+    df["distance_band"] = df["distance"].map(_distance_band)
     history_rows = []
 
     for _, day_df in df.groupby("date", sort=True):
@@ -164,15 +231,47 @@ def _append_history_features(df):
                 item = stats[name][value]
                 starts = item["starts"]
                 top3 = item["top3"]
+                finish_sum = item["finish_sum"]
                 history_row[f"{name}_past_starts"] = starts
                 history_row[f"{name}_past_top3"] = top3
                 history_row[f"{name}_past_top3_rate"] = None if starts == 0 else top3 / starts
+                history_row[f"{name}_past_avg_finish"] = None if starts == 0 else finish_sum / starts
+            for feature_name, item in [
+                ("horse_track", horse_track_stats[(row["horse_id"], row["track_id"])]),
+                ("horse_surface", horse_surface_stats[(row["horse_id"], row["surface_id"])]),
+                (
+                    "horse_distance_band",
+                    horse_distance_band_stats[(row["horse_id"], row["distance_band"])],
+                ),
+                ("jockey_track", jockey_track_stats[(row["jockey_id"], row["track_id"])]),
+                ("jockey_surface", jockey_surface_stats[(row["jockey_id"], row["surface_id"])]),
+                ("trainer_track", trainer_track_stats[(row["trainer_id"], row["track_id"])]),
+                ("trainer_surface", trainer_surface_stats[(row["trainer_id"], row["surface_id"])]),
+            ]:
+                starts = item["starts"]
+                top3 = item["top3"]
+                history_row[f"{feature_name}_past_starts"] = starts
+                history_row[f"{feature_name}_past_top3"] = top3
+                history_row[f"{feature_name}_past_top3_rate"] = None if starts == 0 else top3 / starts
             history_rows.append(history_row)
 
         for _, row in day_df.iterrows():
             target = int(row["target_top3"])
+            finish = float(row["finish_position"])
             for name, id_col in entity_specs:
                 item = stats[name][row[id_col]]
+                item["starts"] += 1
+                item["top3"] += target
+                item["finish_sum"] += finish
+            for item in [
+                horse_track_stats[(row["horse_id"], row["track_id"])],
+                horse_surface_stats[(row["horse_id"], row["surface_id"])],
+                horse_distance_band_stats[(row["horse_id"], row["distance_band"])],
+                jockey_track_stats[(row["jockey_id"], row["track_id"])],
+                jockey_surface_stats[(row["jockey_id"], row["surface_id"])],
+                trainer_track_stats[(row["trainer_id"], row["track_id"])],
+                trainer_surface_stats[(row["trainer_id"], row["surface_id"])],
+            ]:
                 item["starts"] += 1
                 item["top3"] += target
 
@@ -182,7 +281,52 @@ def _append_history_features(df):
         raise RuntimeError("履歴特徴量の作成には pandas が必要です。") from e
 
     history_df = pd.DataFrame(history_rows).set_index("__idx")
-    return df.join(history_df).sort_values(["date", "race_id", "horse_number"])
+    df = df.join(history_df).sort_values(["date", "race_id", "horse_number"])
+    df = _append_race_relative_features(df)
+    return df.drop(columns=["distance_band"])
+
+
+def _empty_history_stat() -> dict:
+    return {"starts": 0, "top3": 0}
+
+
+def _distance_band(distance: int) -> str:
+    if distance < 1400:
+        return "under1400"
+    if distance < 1800:
+        return "1400_1799"
+    if distance < 2200:
+        return "1800_2199"
+    return "2200plus"
+
+
+def _append_race_relative_features(df):
+    relative_specs = [
+        ("horse_past_top3_rate", False),
+        ("horse_past_avg_finish", True),
+        ("horse_track_past_top3_rate", False),
+        ("horse_surface_past_top3_rate", False),
+        ("horse_distance_band_past_top3_rate", False),
+        ("jockey_past_top3_rate", False),
+        ("jockey_past_avg_finish", True),
+        ("jockey_track_past_top3_rate", False),
+        ("jockey_surface_past_top3_rate", False),
+        ("trainer_past_top3_rate", False),
+        ("trainer_past_avg_finish", True),
+        ("trainer_track_past_top3_rate", False),
+        ("trainer_surface_past_top3_rate", False),
+        ("gate", True),
+        ("horse_number", True),
+        ("weight", False),
+        ("age", True),
+    ]
+    for col, ascending in relative_specs:
+        rank_col = f"race_{col}_rank"
+        diff_col = f"race_{col}_diff"
+        filled = df[col].fillna(-1)
+        df[rank_col] = filled.groupby(df["race_id"]).rank(method="average", ascending=ascending)
+        df[diff_col] = df[col] - df.groupby("race_id")[col].transform("mean")
+    return df
 
 
 def build_place_top3_dataset(
