@@ -148,6 +148,64 @@ def _band_report(df, band_col: str, bins: list[float], stake: float) -> list[dic
     return results
 
 
+def _selection_summary(selected, stake: float) -> dict[str, Any]:
+    selections = len(selected)
+    hits = int(selected["target_top3"].sum())
+    stake_total = selections * stake
+    return_min = float((selected["target_top3"] * selected["place_odds_min"] * stake).sum())
+    return_mid = float((selected["target_top3"] * selected["place_odds_mid"] * stake).sum())
+    return_max = float((selected["target_top3"] * selected["place_odds_max"] * stake).sum())
+    return {
+        "races": int(selected["race_id"].nunique()),
+        "selections": selections,
+        "hits": hits,
+        "hit_rate_pct": None if selections == 0 else hits / selections * 100,
+        "return_min_pct": None if stake_total == 0 else return_min / stake_total * 100,
+        "return_mid_pct": None if stake_total == 0 else return_mid / stake_total * 100,
+        "return_max_pct": None if stake_total == 0 else return_max / stake_total * 100,
+    }
+
+
+def _rule_grid_report(
+    df,
+    pred_thresholds: list[float],
+    odds_ranges: list[tuple[float, float]],
+    stake: float,
+    min_selections: int,
+) -> list[dict[str, Any]]:
+    scored = df.dropna(subset=["pred_top3", "place_odds_min", "place_odds_max"]).copy()
+    scored["place_odds_mid"] = (scored["place_odds_min"] + scored["place_odds_max"]) / 2
+
+    results = []
+    for pred_min in pred_thresholds:
+        for odds_min, odds_max in odds_ranges:
+            selected = scored[
+                (scored["pred_top3"] >= pred_min)
+                & (scored["place_odds_mid"] >= odds_min)
+                & (scored["place_odds_mid"] < odds_max)
+            ]
+            summary = _selection_summary(selected, stake)
+            if summary["selections"] < min_selections:
+                continue
+            summary.update(
+                {
+                    "pred_min": pred_min,
+                    "odds_min": odds_min,
+                    "odds_max": odds_max,
+                }
+            )
+            results.append(summary)
+
+    return sorted(
+        results,
+        key=lambda row: (
+            -1 if row["return_mid_pct"] is None else row["return_mid_pct"],
+            row["selections"],
+        ),
+        reverse=True,
+    )
+
+
 def evaluate_place_top3_lgbm(
     early_dataset_path: Path,
     late_dataset_path: Path,
@@ -156,6 +214,7 @@ def evaluate_place_top3_lgbm(
     stake: float = 100.0,
     pred_thresholds: list[float] | None = None,
     expected_value_thresholds: list[float] | None = None,
+    min_rule_selections: int = 100,
 ) -> dict[str, Any]:
     try:
         from lightgbm import LGBMClassifier
@@ -228,6 +287,14 @@ def evaluate_place_top3_lgbm(
     band_results.extend(_band_report(eval_df, "place_odds_mid", [0, 1.5, 2.0, 3.0, 5.0, 10.0, 1000.0], stake=stake))
     band_results.extend(_band_report(eval_df, "expected_value_mid", [0, 0.7, 0.9, 1.0, 1.1, 1.3, 1000.0], stake=stake))
 
+    rule_grid_results = _rule_grid_report(
+        eval_df,
+        pred_thresholds=[0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6],
+        odds_ranges=[(1.0, 1.5), (1.5, 2.0), (2.0, 3.0), (3.0, 5.0), (5.0, 10.0), (10.0, 1000.0)],
+        stake=stake,
+        min_selections=min_rule_selections,
+    )
+
     importance = sorted(
         zip(feature_cols, model.feature_importances_),
         key=lambda x: int(x[1]),
@@ -250,6 +317,8 @@ def evaluate_place_top3_lgbm(
         "strategies": strategy_results,
         "thresholds": threshold_results,
         "bands": band_results,
+        "rule_grid": rule_grid_results[:20],
+        "min_rule_selections": min_rule_selections,
         "feature_importance": importance[:15],
     }
 
@@ -318,6 +387,28 @@ def format_lgbm_report(report: dict[str, Any]) -> str:
         max_pct = row["return_max_pct"]
         lines.append(
             f"{row['band_col']:<18} {row['band']:<16} {row['races']:>5,}  "
+            f"{row['selections']:>10,}  {row['hits']:>4,}  "
+            f"{'n/a' if hit_rate is None else f'{hit_rate:.2f}%':>8}  "
+            f"{'n/a' if min_pct is None else f'{min_pct:.2f}%':>9}  "
+            f"{'n/a' if mid_pct is None else f'{mid_pct:.2f}%':>9}  "
+            f"{'n/a' if max_pct is None else f'{max_pct:.2f}%':>9}"
+        )
+
+    lines.extend(
+        [
+            "",
+            f"Top rule grid results on test period (min selections: {report['min_rule_selections']})",
+            "pred_min  odds_mid_range   races  selections  hits  hit_rate  return_min  return_mid  return_max",
+        ]
+    )
+    for row in report["rule_grid"]:
+        odds_range = f"[{row['odds_min']:.1f}, {row['odds_max']:.1f})"
+        hit_rate = row["hit_rate_pct"]
+        min_pct = row["return_min_pct"]
+        mid_pct = row["return_mid_pct"]
+        max_pct = row["return_max_pct"]
+        lines.append(
+            f"{row['pred_min']:>8.2f}  {odds_range:<15} {row['races']:>5,}  "
             f"{row['selections']:>10,}  {row['hits']:>4,}  "
             f"{'n/a' if hit_rate is None else f'{hit_rate:.2f}%':>8}  "
             f"{'n/a' if min_pct is None else f'{min_pct:.2f}%':>9}  "

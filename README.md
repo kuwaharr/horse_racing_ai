@@ -176,6 +176,12 @@ python scripts\evaluate_place_top3_lgbm.py --engine fastparquet
 python scripts\evaluate_place_top3_lgbm.py --engine fastparquet --pred-thresholds "0.3,0.4,0.5" --ev-thresholds "1.0,1.1,1.2"
 ```
 
+予測確率と複勝オッズ帯の交差条件を評価する場合、少なすぎる買い目を除外する最低件数を指定できます。
+
+```powershell
+python scripts\evaluate_place_top3_lgbm.py --engine fastparquet --min-rule-selections 100
+```
+
 ## 実装メモ
 
 - パス定義は`src/data/paths.py`にあります

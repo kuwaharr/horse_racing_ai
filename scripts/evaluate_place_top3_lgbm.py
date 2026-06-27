@@ -24,6 +24,7 @@ def main() -> None:
     arg_parser.add_argument("--stake", type=float, default=100.0)
     arg_parser.add_argument("--pred-thresholds", type=_float_list, default=None)
     arg_parser.add_argument("--ev-thresholds", type=_float_list, default=None)
+    arg_parser.add_argument("--min-rule-selections", type=int, default=100)
     args = arg_parser.parse_args()
 
     report = evaluate_place_top3_lgbm(
@@ -34,6 +35,7 @@ def main() -> None:
         stake=args.stake,
         pred_thresholds=args.pred_thresholds,
         expected_value_thresholds=args.ev_thresholds,
+        min_rule_selections=args.min_rule_selections,
     )
     print(format_lgbm_report(report))
 
