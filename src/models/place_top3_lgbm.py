@@ -322,7 +322,7 @@ def _rule_condition_report(
 def _fit_and_evaluate_split(
     train_df,
     test_df,
-    late_df,
+    odds_df,
     stake: float,
     pred_thresholds: list[float] | None,
     expected_value_thresholds: list[float] | None,
@@ -369,7 +369,7 @@ def _fit_and_evaluate_split(
     eval_df["pred_top3"] = pred
 
     odds_cols = ["race_id", "horse_number", "place_odds_min", "place_odds_max"]
-    eval_df = eval_df.merge(late_df[odds_cols], on=["race_id", "horse_number"], how="left")
+    eval_df = eval_df.merge(odds_df[odds_cols], on=["race_id", "horse_number"], how="left")
     eval_df["expected_value_min"] = eval_df["pred_top3"] * eval_df["place_odds_min"]
     eval_df["expected_value_mid"] = eval_df["pred_top3"] * (
         (eval_df["place_odds_min"] + eval_df["place_odds_max"]) / 2
@@ -442,8 +442,8 @@ def _fit_and_evaluate_split(
 
 
 def evaluate_place_top3_lgbm(
-    early_dataset_path: Path,
-    late_dataset_path: Path,
+    training_dataset_path: Path,
+    odds_dataset_path: Path,
     engine: str = "auto",
     test_ratio: float = 0.2,
     stake: float = 100.0,
@@ -456,14 +456,14 @@ def evaluate_place_top3_lgbm(
     except ModuleNotFoundError as e:
         raise RuntimeError("LightGBM評価には scikit-learn が必要です。") from e
 
-    early_df = _read_parquet(early_dataset_path, engine)
-    late_df = _read_parquet(late_dataset_path, engine)
+    training_df = _read_parquet(training_dataset_path, engine)
+    odds_df = _read_parquet(odds_dataset_path, engine)
 
-    train_df, test_df, split_date = _split_by_date(early_df, test_ratio)
+    train_df, test_df, split_date = _split_by_date(training_df, test_ratio)
     split_report = _fit_and_evaluate_split(
         train_df=train_df,
         test_df=test_df,
-        late_df=late_df,
+        odds_df=odds_df,
         stake=stake,
         pred_thresholds=pred_thresholds,
         expected_value_thresholds=expected_value_thresholds,
@@ -471,10 +471,10 @@ def evaluate_place_top3_lgbm(
     )
 
     return {
-        "early_dataset_path": str(early_dataset_path),
-        "late_dataset_path": str(late_dataset_path),
-        "rows": len(early_df),
-        "races": int(early_df["race_id"].nunique()),
+        "training_dataset_path": str(training_dataset_path),
+        "odds_dataset_path": str(odds_dataset_path),
+        "rows": len(training_df),
+        "races": int(training_df["race_id"].nunique()),
         "train_rows": len(train_df),
         "train_races": int(train_df["race_id"].nunique()),
         "test_rows": len(test_df),
@@ -519,28 +519,28 @@ def _make_walk_forward_splits(dates: list[str], n_splits: int, min_train_ratio: 
 
 
 def evaluate_place_top3_lgbm_walk_forward(
-    early_dataset_path: Path,
-    late_dataset_path: Path,
+    training_dataset_path: Path,
+    odds_dataset_path: Path,
     engine: str = "auto",
     n_splits: int = 4,
     min_train_ratio: float = 0.5,
     stake: float = 100.0,
     min_rule_selections: int = 30,
 ) -> dict[str, Any]:
-    early_df = _read_parquet(early_dataset_path, engine)
-    late_df = _read_parquet(late_dataset_path, engine)
+    training_df = _read_parquet(training_dataset_path, engine)
+    odds_df = _read_parquet(odds_dataset_path, engine)
 
-    dates = sorted(early_df["date"].dropna().unique())
+    dates = sorted(training_df["date"].dropna().unique())
     splits = _make_walk_forward_splits(dates, n_splits=n_splits, min_train_ratio=min_train_ratio)
 
     fold_reports = []
     rule_rows = []
     for fold_idx, (test_start, test_end) in enumerate(splits, start=1):
-        train_df, test_df = _split_by_start_date(early_df, test_start, test_end)
+        train_df, test_df = _split_by_start_date(training_df, test_start, test_end)
         split_report = _fit_and_evaluate_split(
             train_df=train_df,
             test_df=test_df,
-            late_df=late_df,
+            odds_df=odds_df,
             stake=stake,
             pred_thresholds=None,
             expected_value_thresholds=None,
@@ -579,10 +579,10 @@ def evaluate_place_top3_lgbm_walk_forward(
     condition_summary = _summarize_condition_rules(rule_rows, n_folds=len(fold_reports))
 
     return {
-        "early_dataset_path": str(early_dataset_path),
-        "late_dataset_path": str(late_dataset_path),
-        "rows": len(early_df),
-        "races": int(early_df["race_id"].nunique()),
+        "training_dataset_path": str(training_dataset_path),
+        "odds_dataset_path": str(odds_dataset_path),
+        "rows": len(training_df),
+        "races": int(training_df["race_id"].nunique()),
         "n_splits": len(fold_reports),
         "min_train_ratio": min_train_ratio,
         "min_rule_selections": min_rule_selections,
@@ -593,8 +593,8 @@ def evaluate_place_top3_lgbm_walk_forward(
 
 
 def evaluate_fixed_place_top3_rule_walk_forward(
-    early_dataset_path: Path,
-    late_dataset_path: Path,
+    training_dataset_path: Path,
+    odds_dataset_path: Path,
     engine: str = "auto",
     n_splits: int = 4,
     min_train_ratio: float = 0.5,
@@ -609,20 +609,20 @@ def evaluate_fixed_place_top3_rule_walk_forward(
     exclude_track_ids: list[int] | None = None,
     surface_id: int | None = None,
 ) -> dict[str, Any]:
-    early_df = _read_parquet(early_dataset_path, engine)
-    late_df = _read_parquet(late_dataset_path, engine)
+    training_df = _read_parquet(training_dataset_path, engine)
+    odds_df = _read_parquet(odds_dataset_path, engine)
 
-    dates = sorted(early_df["date"].dropna().unique())
+    dates = sorted(training_df["date"].dropna().unique())
     splits = _make_walk_forward_splits(dates, n_splits=n_splits, min_train_ratio=min_train_ratio)
 
     fold_reports = []
     selected_rows = []
     for fold_idx, (test_start, test_end) in enumerate(splits, start=1):
-        train_df, test_df = _split_by_start_date(early_df, test_start, test_end)
+        train_df, test_df = _split_by_start_date(training_df, test_start, test_end)
         split_report = _fit_and_evaluate_split(
             train_df=train_df,
             test_df=test_df,
-            late_df=late_df,
+            odds_df=odds_df,
             stake=stake,
             pred_thresholds=None,
             expected_value_thresholds=None,
@@ -667,10 +667,10 @@ def evaluate_fixed_place_top3_rule_walk_forward(
     overall = _selection_summary(all_selected, stake)
 
     return {
-        "early_dataset_path": str(early_dataset_path),
-        "late_dataset_path": str(late_dataset_path),
-        "rows": len(early_df),
-        "races": int(early_df["race_id"].nunique()),
+        "training_dataset_path": str(training_dataset_path),
+        "odds_dataset_path": str(odds_dataset_path),
+        "rows": len(training_df),
+        "races": int(training_df["race_id"].nunique()),
         "n_splits": len(fold_reports),
         "min_train_ratio": min_train_ratio,
         "rule": {
@@ -696,8 +696,8 @@ def format_fixed_rule_report(report: dict[str, Any]) -> str:
     rule = report["rule"]
     overall = report["overall"]
     lines = [
-        f"Early dataset: {report['early_dataset_path']}",
-        f"Late odds dataset: {report['late_dataset_path']}",
+        f"Training dataset: {report['training_dataset_path']}",
+        f"Evaluation odds dataset: {report['odds_dataset_path']}",
         f"Rows: {report['rows']:,}",
         f"Races: {report['races']:,}",
         f"Folds: {report['n_splits']}",
@@ -832,8 +832,8 @@ def _summarize_condition_rules(rule_rows: list[dict[str, Any]], n_folds: int) ->
 
 def format_walk_forward_report(report: dict[str, Any]) -> str:
     lines = [
-        f"Early dataset: {report['early_dataset_path']}",
-        f"Late odds dataset: {report['late_dataset_path']}",
+        f"Training dataset: {report['training_dataset_path']}",
+        f"Evaluation odds dataset: {report['odds_dataset_path']}",
         f"Rows: {report['rows']:,}",
         f"Races: {report['races']:,}",
         f"Folds: {report['n_splits']}",
@@ -890,8 +890,8 @@ def format_walk_forward_report(report: dict[str, Any]) -> str:
 def format_lgbm_report(report: dict[str, Any]) -> str:
     metrics = report["metrics"]
     lines = [
-        f"Early dataset: {report['early_dataset_path']}",
-        f"Late odds dataset: {report['late_dataset_path']}",
+        f"Training dataset: {report['training_dataset_path']}",
+        f"Evaluation odds dataset: {report['odds_dataset_path']}",
         f"Rows: {report['rows']:,}",
         f"Races: {report['races']:,}",
         f"Split date: {report['split_date']}",

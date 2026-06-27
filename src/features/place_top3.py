@@ -5,17 +5,11 @@ from math import isnan
 from pathlib import Path
 
 
-DEFAULT_DATASET_NAMES = {
-    "early": "place_top3_early_dataset.parquet",
-    "late": "place_top3_late_dataset.parquet",
-}
-DEFAULT_HISTORY_DATASET_NAMES = {
-    "early": "place_top3_early_history_dataset.parquet",
-    "late": "place_top3_late_history_dataset.parquet",
-}
+DEFAULT_TRAINING_DATASET_NAME = "place_top3_dataset.parquet"
+DEFAULT_EVAL_ODDS_DATASET_NAME = "place_top3_eval_odds.parquet"
 
 
-LATE_FEATURE_COLUMNS = [
+EVAL_ODDS_COLUMNS = [
     "race_id",
     "date",
     "track_id",
@@ -48,7 +42,7 @@ LATE_FEATURE_COLUMNS = [
 ]
 
 
-EARLY_FEATURE_COLUMNS = [
+TRAINING_FEATURE_COLUMNS = [
     "race_id",
     "date",
     "track_id",
@@ -74,12 +68,6 @@ EARLY_FEATURE_COLUMNS = [
     "trainer_id",
     "target_top3",
 ]
-
-
-FEATURE_COLUMNS_BY_MODE = {
-    "early": EARLY_FEATURE_COLUMNS,
-    "late": LATE_FEATURE_COLUMNS,
-}
 
 HISTORY_FEATURE_COLUMNS = [
     "horse_past_starts",
@@ -304,11 +292,12 @@ ORDER BY ra.date, ra.race_id, ru.horse_number
 """
 
 
-def default_dataset_name(mode: str, history_features: bool = False) -> str:
-    names = DEFAULT_HISTORY_DATASET_NAMES if history_features else DEFAULT_DATASET_NAMES
-    if mode not in names:
-        raise ValueError(f"Unknown dataset mode: {mode}")
-    return names[mode]
+def default_training_dataset_name() -> str:
+    return DEFAULT_TRAINING_DATASET_NAME
+
+
+def default_eval_odds_dataset_name() -> str:
+    return DEFAULT_EVAL_ODDS_DATASET_NAME
 
 
 def _append_history_features(df):
@@ -654,13 +643,9 @@ def _append_race_relative_features(df):
 def build_place_top3_dataset(
     db_path: Path,
     output_path: Path,
-    mode: str = "late",
     engine: str = "auto",
-    history_features: bool = False,
+    history_features: bool = True,
 ) -> int:
-    if mode not in FEATURE_COLUMNS_BY_MODE:
-        raise ValueError(f"Unknown dataset mode: {mode}")
-
     try:
         import pandas as pd
     except ModuleNotFoundError as e:
@@ -677,10 +662,42 @@ def build_place_top3_dataset(
     if history_features:
         df = _append_history_features(df)
 
-    columns = FEATURE_COLUMNS_BY_MODE[mode]
+    columns = TRAINING_FEATURE_COLUMNS
     if history_features:
         columns = columns[:-1] + HISTORY_FEATURE_COLUMNS + columns[-1:]
     df = df[columns]
+
+    try:
+        df.to_parquet(output_path, index=False, engine=engine)
+    except ImportError as e:
+        raise RuntimeError(
+            "Parquet出力エンジンが見つかりません。"
+            " PowerShellで `pip install pyarrow` を実行するか、"
+            " `--engine fastparquet` を指定してください。"
+        ) from e
+
+    return len(df)
+
+
+def build_place_top3_eval_odds_dataset(
+    db_path: Path,
+    output_path: Path,
+    engine: str = "auto",
+) -> int:
+    try:
+        import pandas as pd
+    except ModuleNotFoundError as e:
+        raise RuntimeError(
+            "Parquet出力には pandas と pyarrow または fastparquet が必要です。"
+            " PowerShellで `pip install pandas pyarrow` を実行してください。"
+        ) from e
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    with sqlite3.connect(db_path) as conn:
+        df = pd.read_sql_query(PLACE_TOP3_BASE_QUERY, conn)
+
+    df = df[EVAL_ODDS_COLUMNS]
 
     try:
         df.to_parquet(output_path, index=False, engine=engine)

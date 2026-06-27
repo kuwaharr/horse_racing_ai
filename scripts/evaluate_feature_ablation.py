@@ -7,7 +7,7 @@ if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
 from src.data.paths import FEAT_DIR
-from src.features.place_top3 import default_dataset_name
+from src.features.place_top3 import default_eval_odds_dataset_name, default_training_dataset_name
 from src.models.place_top3_lgbm import (
     _apply_fixed_rule,
     _fit_and_evaluate_split,
@@ -73,8 +73,8 @@ def _columns_for_patterns(columns: list[str], patterns: list[str]) -> list[str]:
 
 def _evaluate_variant(
     name: str,
-    early_df,
-    late_df,
+    training_df,
+    odds_df,
     drop_cols: list[str],
     n_splits: int,
     min_train_ratio: float,
@@ -90,18 +90,18 @@ def _evaluate_variant(
     except ModuleNotFoundError as e:
         raise RuntimeError("特徴量ablation評価には pandas が必要です。") from e
 
-    eval_early_df = early_df.drop(columns=drop_cols)
-    dates = sorted(eval_early_df["date"].dropna().unique())
+    eval_training_df = training_df.drop(columns=drop_cols)
+    dates = sorted(eval_training_df["date"].dropna().unique())
     splits = _make_walk_forward_splits(dates, n_splits=n_splits, min_train_ratio=min_train_ratio)
 
     fold_rows = []
     selected_rows = []
     for fold_idx, (test_start, test_end) in enumerate(splits, start=1):
-        train_df, test_df = _split_by_start_date(eval_early_df, test_start, test_end)
+        train_df, test_df = _split_by_start_date(eval_training_df, test_start, test_end)
         split_report = _fit_and_evaluate_split(
             train_df=train_df,
             test_df=test_df,
-            late_df=late_df,
+            odds_df=odds_df,
             stake=stake,
             pred_thresholds=None,
             expected_value_thresholds=None,
@@ -170,8 +170,8 @@ def _format_report(rows: list[dict]) -> str:
 
 def main() -> None:
     arg_parser = argparse.ArgumentParser()
-    arg_parser.add_argument("--early-dataset", type=Path, default=FEAT_DIR / default_dataset_name("early", history_features=True))
-    arg_parser.add_argument("--late-dataset", type=Path, default=FEAT_DIR / default_dataset_name("late", history_features=True))
+    arg_parser.add_argument("--training-dataset", type=Path, default=FEAT_DIR / default_training_dataset_name())
+    arg_parser.add_argument("--odds-dataset", type=Path, default=FEAT_DIR / default_eval_odds_dataset_name())
     arg_parser.add_argument("--engine", choices=["auto", "pyarrow", "fastparquet"], default="auto")
     arg_parser.add_argument("--n-splits", type=int, default=4)
     arg_parser.add_argument("--min-train-ratio", type=float, default=0.5)
@@ -183,9 +183,9 @@ def main() -> None:
     arg_parser.add_argument("--distance-max", type=int, default=2200)
     args = arg_parser.parse_args()
 
-    early_df = _read_parquet(args.early_dataset, args.engine)
-    late_df = _read_parquet(args.late_dataset, args.engine)
-    all_columns = list(early_df.columns)
+    training_df = _read_parquet(args.training_dataset, args.engine)
+    odds_df = _read_parquet(args.odds_dataset, args.engine)
+    all_columns = list(training_df.columns)
 
     variants = [("all_features", [])]
     variants.extend(
@@ -196,8 +196,8 @@ def main() -> None:
     rows = [
         _evaluate_variant(
             name=name,
-            early_df=early_df,
-            late_df=late_df,
+            training_df=training_df,
+            odds_df=odds_df,
             drop_cols=drop_cols,
             n_splits=args.n_splits,
             min_train_ratio=args.min_train_ratio,

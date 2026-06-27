@@ -7,7 +7,7 @@ if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
 from src.data.paths import FEAT_DIR
-from src.features.place_top3 import default_dataset_name
+from src.features.place_top3 import default_eval_odds_dataset_name, default_training_dataset_name
 from src.models.place_top3_lgbm import evaluate_place_top3_lgbm, format_lgbm_report
 
 
@@ -17,8 +17,8 @@ def _float_list(value: str) -> list[float]:
 
 def main() -> None:
     arg_parser = argparse.ArgumentParser()
-    arg_parser.add_argument("--early-dataset", type=Path, default=FEAT_DIR / default_dataset_name("early"))
-    arg_parser.add_argument("--late-dataset", type=Path, default=FEAT_DIR / default_dataset_name("late"))
+    arg_parser.add_argument("--training-dataset", type=Path, default=FEAT_DIR / default_training_dataset_name())
+    arg_parser.add_argument("--odds-dataset", type=Path, default=FEAT_DIR / default_eval_odds_dataset_name())
     arg_parser.add_argument("--engine", choices=["auto", "pyarrow", "fastparquet"], default="auto")
     arg_parser.add_argument("--test-ratio", type=float, default=0.2)
     arg_parser.add_argument("--stake", type=float, default=100.0)
@@ -28,8 +28,8 @@ def main() -> None:
     args = arg_parser.parse_args()
 
     report = evaluate_place_top3_lgbm(
-        early_dataset_path=args.early_dataset,
-        late_dataset_path=args.late_dataset,
+        training_dataset_path=args.training_dataset,
+        odds_dataset_path=args.odds_dataset,
         engine=args.engine,
         test_ratio=args.test_ratio,
         stake=args.stake,

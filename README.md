@@ -128,31 +128,26 @@ python scripts\check_db_quality.py --db "D:\horse_racing_ai\data\hr.db"
 複勝3着内予測用の学習データセットをParquetで作成する場合:
 
 ```powershell
-python scripts\build_place_top3_dataset.py --mode late --engine fastparquet
+python scripts\build_place_top3_dataset.py --kind training --engine fastparquet
 ```
 
-早期予測用データセットを作成する場合:
+評価用の人気・複勝オッズデータをParquetで作成する場合:
 
 ```powershell
-python scripts\build_place_top3_dataset.py --mode early --engine fastparquet
+python scripts\build_place_top3_dataset.py --kind eval-odds --engine fastparquet
 ```
 
-過去成績特徴量を追加する場合:
-
-```powershell
-python scripts\build_place_top3_dataset.py --mode early --engine fastparquet --history-features
-```
-
-この場合のデフォルト出力先は`D:\horse_racing_ai\data\feature\place_top3_early_history_dataset.parquet`です。
+学習データセットのデフォルト出力先は`D:\horse_racing_ai\data\feature\place_top3_dataset.parquet`です。
+評価用オッズデータのデフォルト出力先は`D:\horse_racing_ai\data\feature\place_top3_eval_odds.parquet`です。
 過去成績特徴量には、馬・騎手・調教師の過去成績、馬や騎手の競馬場/芝ダート/距離帯別成績、直近フォーム、前走からの日数・距離変化、過去平均との差による距離・斤量適性、同一レース内での過去成績順位や平均との差分が含まれます。
 
 出力先を指定する場合:
 
 ```powershell
-python scripts\build_place_top3_dataset.py --mode late --engine fastparquet --output "D:\horse_racing_ai\data\feature\place_top3_late_dataset.parquet"
+python scripts\build_place_top3_dataset.py --kind training --engine fastparquet --output "D:\horse_racing_ai\data\feature\place_top3_dataset.parquet"
 ```
 
-`early`は人気、オッズ、馬体重を含めません。`late`は直前予測用として人気、複勝オッズ、馬体重を含めます。
+学習データセットには人気、オッズ、馬体重など取得タイミングが遅い情報を含めません。複勝オッズや人気は、ベースライン評価と回収率計算用の`eval-odds`データセットに分離します。
 
 人気順・複勝オッズ順のベースラインを評価する場合:
 
@@ -160,9 +155,9 @@ python scripts\build_place_top3_dataset.py --mode late --engine fastparquet --ou
 python scripts\evaluate_baselines.py --engine fastparquet
 ```
 
-このベースライン評価は、人気と複勝オッズを使うため`late`データセット向けです。
+このベースライン評価は、人気と複勝オッズを使うため評価用オッズデータセット向けです。
 
-`early`データセットでLightGBMを学習し、評価時だけ複勝オッズを使って回収率を確認する場合:
+リークのない学習データセットでLightGBMを学習し、評価時だけ複勝オッズを使って回収率を確認する場合:
 
 ```powershell
 python scripts\evaluate_place_top3_lgbm.py --engine fastparquet
