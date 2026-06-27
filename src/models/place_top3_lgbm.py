@@ -179,6 +179,32 @@ def _selection_summary(selected, stake: float) -> dict[str, Any]:
     }
 
 
+def _apply_fixed_rule(
+    df,
+    pred_min: float,
+    odds_min: float,
+    odds_max: float,
+    distance_min: int | None,
+    distance_max: int | None,
+    track_id: int | None,
+    surface_id: int | None,
+):
+    selected = df[
+        (df["pred_top3"] >= pred_min)
+        & (df["place_odds_mid"] >= odds_min)
+        & (df["place_odds_mid"] < odds_max)
+    ].copy()
+    if distance_min is not None:
+        selected = selected[selected["distance"] >= distance_min]
+    if distance_max is not None:
+        selected = selected[selected["distance"] < distance_max]
+    if track_id is not None:
+        selected = selected[selected["track_id"] == track_id]
+    if surface_id is not None:
+        selected = selected[selected["surface_id"] == surface_id]
+    return selected
+
+
 def _rule_grid_report(
     df,
     pred_thresholds: list[float],
@@ -218,6 +244,17 @@ def _rule_grid_report(
         ),
         reverse=True,
     )
+
+
+def _fixed_rule_breakdown(selected, group_col: str, stake: float) -> list[dict[str, Any]]:
+    results = []
+    if selected.empty:
+        return results
+    for value, group in selected.groupby(group_col, observed=True):
+        summary = _selection_summary(group, stake)
+        summary.update({"group_col": group_col, "group_value": str(value)})
+        results.append(summary)
+    return sorted(results, key=lambda row: row["return_mid_pct"], reverse=True)
 
 
 def _rule_condition_report(
@@ -388,6 +425,7 @@ def _fit_and_evaluate_split(
         "features": feature_cols,
         "categorical_features": categorical_cols,
         "metrics": metric_report,
+        "eval_df": eval_df,
         "strategies": strategy_results,
         "thresholds": threshold_results,
         "bands": band_results,
@@ -546,6 +584,149 @@ def evaluate_place_top3_lgbm_walk_forward(
         "rule_summary": rule_summary[:20],
         "condition_summary": condition_summary[:20],
     }
+
+
+def evaluate_fixed_place_top3_rule_walk_forward(
+    early_dataset_path: Path,
+    late_dataset_path: Path,
+    engine: str = "auto",
+    n_splits: int = 4,
+    min_train_ratio: float = 0.5,
+    stake: float = 100.0,
+    pred_min: float = 0.35,
+    odds_min: float = 3.0,
+    odds_max: float = 5.0,
+    distance_min: int | None = 1800,
+    distance_max: int | None = 2200,
+    track_id: int | None = None,
+    surface_id: int | None = None,
+) -> dict[str, Any]:
+    early_df = _read_parquet(early_dataset_path, engine)
+    late_df = _read_parquet(late_dataset_path, engine)
+
+    dates = sorted(early_df["date"].dropna().unique())
+    splits = _make_walk_forward_splits(dates, n_splits=n_splits, min_train_ratio=min_train_ratio)
+
+    fold_reports = []
+    selected_rows = []
+    for fold_idx, (test_start, test_end) in enumerate(splits, start=1):
+        train_df, test_df = _split_by_start_date(early_df, test_start, test_end)
+        split_report = _fit_and_evaluate_split(
+            train_df=train_df,
+            test_df=test_df,
+            late_df=late_df,
+            stake=stake,
+            pred_thresholds=None,
+            expected_value_thresholds=None,
+            min_rule_selections=1,
+        )
+        selected = _apply_fixed_rule(
+            split_report["eval_df"],
+            pred_min=pred_min,
+            odds_min=odds_min,
+            odds_max=odds_max,
+            distance_min=distance_min,
+            distance_max=distance_max,
+            track_id=track_id,
+            surface_id=surface_id,
+        )
+        selected = selected.copy()
+        selected["fold"] = fold_idx
+        selected["month"] = selected["date"].str.slice(0, 7)
+        selected_rows.append(selected)
+
+        summary = _selection_summary(selected, stake)
+        summary.update(
+            {
+                "fold": fold_idx,
+                "test_start": test_start,
+                "test_end": test_end,
+                "auc": split_report["metrics"]["auc"],
+                "logloss": split_report["metrics"]["logloss"],
+                "brier": split_report["metrics"]["brier"],
+            }
+        )
+        fold_reports.append(summary)
+
+    try:
+        import pandas as pd
+    except ModuleNotFoundError as e:
+        raise RuntimeError("固定ルール評価には pandas が必要です。") from e
+
+    all_selected = pd.concat(selected_rows, ignore_index=True) if selected_rows else pd.DataFrame()
+    overall = _selection_summary(all_selected, stake)
+
+    return {
+        "early_dataset_path": str(early_dataset_path),
+        "late_dataset_path": str(late_dataset_path),
+        "rows": len(early_df),
+        "races": int(early_df["race_id"].nunique()),
+        "n_splits": len(fold_reports),
+        "min_train_ratio": min_train_ratio,
+        "rule": {
+            "pred_min": pred_min,
+            "odds_min": odds_min,
+            "odds_max": odds_max,
+            "distance_min": distance_min,
+            "distance_max": distance_max,
+            "track_id": track_id,
+            "surface_id": surface_id,
+        },
+        "overall": overall,
+        "folds": fold_reports,
+        "by_month": _fixed_rule_breakdown(all_selected, "month", stake),
+        "by_track": _fixed_rule_breakdown(all_selected, "track_id", stake),
+        "by_surface": _fixed_rule_breakdown(all_selected, "surface_id", stake),
+    }
+
+
+def format_fixed_rule_report(report: dict[str, Any]) -> str:
+    rule = report["rule"]
+    overall = report["overall"]
+    lines = [
+        f"Early dataset: {report['early_dataset_path']}",
+        f"Late odds dataset: {report['late_dataset_path']}",
+        f"Rows: {report['rows']:,}",
+        f"Races: {report['races']:,}",
+        f"Folds: {report['n_splits']}",
+        (
+            "Rule: "
+            f"pred_top3>={rule['pred_min']:.2f}, "
+            f"odds_mid=[{rule['odds_min']:.1f},{rule['odds_max']:.1f}), "
+            f"distance=[{rule['distance_min']},{rule['distance_max']}), "
+            f"track_id={rule['track_id']}, surface_id={rule['surface_id']}"
+        ),
+        "",
+        "Overall",
+        "selections  hits  hit_rate  return_min  return_mid  return_max",
+        (
+            f"{overall['selections']:>10,}  {overall['hits']:>4,}  "
+            f"{overall['hit_rate_pct']:>7.2f}%  {overall['return_min_pct']:>9.2f}%  "
+            f"{overall['return_mid_pct']:>9.2f}%  {overall['return_max_pct']:>9.2f}%"
+        ),
+        "",
+        "Fold results",
+        "fold  test_start  test_end    selections  hits  hit_rate  return_min  return_mid  return_max",
+    ]
+    for row in report["folds"]:
+        test_end = row["test_end"] or "end"
+        lines.append(
+            f"{row['fold']:>4}  {row['test_start']}  {test_end:<10}  "
+            f"{row['selections']:>10,}  {row['hits']:>4,}  "
+            f"{row['hit_rate_pct']:>7.2f}%  {row['return_min_pct']:>9.2f}%  "
+            f"{row['return_mid_pct']:>9.2f}%  {row['return_max_pct']:>9.2f}%"
+        )
+
+    for section_name, key in [("Monthly", "by_month"), ("Track", "by_track"), ("Surface", "by_surface")]:
+        lines.extend(["", f"{section_name} breakdown", "value       selections  hits  hit_rate  return_min  return_mid  return_max"])
+        for row in report[key]:
+            lines.append(
+                f"{row['group_value']:<10}  {row['selections']:>10,}  {row['hits']:>4,}  "
+                f"{row['hit_rate_pct']:>7.2f}%  {row['return_min_pct']:>9.2f}%  "
+                f"{row['return_mid_pct']:>9.2f}%  {row['return_max_pct']:>9.2f}%"
+            )
+
+    return "\n".join(lines)
 
 
 def _summarize_rules(rule_rows: list[dict[str, Any]], n_folds: int) -> list[dict[str, Any]]:

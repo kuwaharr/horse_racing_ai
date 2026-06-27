@@ -190,6 +190,12 @@ python scripts\evaluate_place_top3_walk_forward.py --engine fastparquet
 
 walk-forward評価では、ルール全体の安定性に加えて、開催場、芝/ダート、距離帯、頭数帯ごとの成績も確認できます。
 
+有望な固定ルールを詳細評価する場合:
+
+```powershell
+python scripts\evaluate_fixed_place_top3_rule.py --engine fastparquet
+```
+
 ## 実装メモ
 
 - パス定義は`src/data/paths.py`にあります
