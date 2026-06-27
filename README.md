@@ -266,6 +266,12 @@ python scripts\search_rules_from_predictions.py --engine fastparquet --min-selec
 - 中間: `pred_top3>=0.35`、複勝オッズ中間値`[3.0,5.0)`、距離`[1800,2200)`、芝限定で98レース、121点、52的中、回収率159.63%、最低fold回収率107.50%
 - 買い目多め: `pred_top3>=0.35`、複勝オッズ中間値`[3.0,5.0)`、距離`[1800,2200)`、開催場`4,5,6,8,9`で184レース、225点、88的中、回収率146.24%、最低fold回収率113.06%
 
+この3候補をまとめて再評価する場合:
+
+```powershell
+python scripts\evaluate_rule_tiers_from_predictions.py --engine fastparquet --predictions "D:\horse_racing_ai\data\model\catboost_place_top3_predictions_affinity_lift_trial.parquet"
+```
+
 特徴量グループごとの影響を確認する場合:
 
 ```powershell
