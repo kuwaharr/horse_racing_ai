@@ -1,10 +1,15 @@
 import sqlite3
+from collections import defaultdict
 from pathlib import Path
 
 
 DEFAULT_DATASET_NAMES = {
     "early": "place_top3_early_dataset.parquet",
     "late": "place_top3_late_dataset.parquet",
+}
+DEFAULT_HISTORY_DATASET_NAMES = {
+    "early": "place_top3_early_history_dataset.parquet",
+    "late": "place_top3_late_history_dataset.parquet",
 }
 
 
@@ -74,6 +79,18 @@ FEATURE_COLUMNS_BY_MODE = {
     "late": LATE_FEATURE_COLUMNS,
 }
 
+HISTORY_FEATURE_COLUMNS = [
+    "horse_past_starts",
+    "horse_past_top3",
+    "horse_past_top3_rate",
+    "jockey_past_starts",
+    "jockey_past_top3",
+    "jockey_past_top3_rate",
+    "trainer_past_starts",
+    "trainer_past_top3",
+    "trainer_past_top3_rate",
+]
+
 
 PLACE_TOP3_BASE_QUERY = """
 SELECT
@@ -118,13 +135,63 @@ ORDER BY ra.date, ra.race_id, ru.horse_number
 """
 
 
-def default_dataset_name(mode: str) -> str:
-    if mode not in DEFAULT_DATASET_NAMES:
+def default_dataset_name(mode: str, history_features: bool = False) -> str:
+    names = DEFAULT_HISTORY_DATASET_NAMES if history_features else DEFAULT_DATASET_NAMES
+    if mode not in names:
         raise ValueError(f"Unknown dataset mode: {mode}")
-    return DEFAULT_DATASET_NAMES[mode]
+    return names[mode]
 
 
-def build_place_top3_dataset(db_path: Path, output_path: Path, mode: str = "late", engine: str = "auto") -> int:
+def _append_history_features(df):
+    entity_specs = [
+        ("horse", "horse_id"),
+        ("jockey", "jockey_id"),
+        ("trainer", "trainer_id"),
+    ]
+    stats = {
+        name: defaultdict(lambda: {"starts": 0, "top3": 0})
+        for name, _ in entity_specs
+    }
+
+    df = df.sort_values(["date", "race_id", "horse_number"]).copy()
+    history_rows = []
+
+    for _, day_df in df.groupby("date", sort=True):
+        for idx, row in day_df.iterrows():
+            history_row = {"__idx": idx}
+            for name, id_col in entity_specs:
+                value = row[id_col]
+                item = stats[name][value]
+                starts = item["starts"]
+                top3 = item["top3"]
+                history_row[f"{name}_past_starts"] = starts
+                history_row[f"{name}_past_top3"] = top3
+                history_row[f"{name}_past_top3_rate"] = None if starts == 0 else top3 / starts
+            history_rows.append(history_row)
+
+        for _, row in day_df.iterrows():
+            target = int(row["target_top3"])
+            for name, id_col in entity_specs:
+                item = stats[name][row[id_col]]
+                item["starts"] += 1
+                item["top3"] += target
+
+    try:
+        import pandas as pd
+    except ModuleNotFoundError as e:
+        raise RuntimeError("履歴特徴量の作成には pandas が必要です。") from e
+
+    history_df = pd.DataFrame(history_rows).set_index("__idx")
+    return df.join(history_df).sort_values(["date", "race_id", "horse_number"])
+
+
+def build_place_top3_dataset(
+    db_path: Path,
+    output_path: Path,
+    mode: str = "late",
+    engine: str = "auto",
+    history_features: bool = False,
+) -> int:
     if mode not in FEATURE_COLUMNS_BY_MODE:
         raise ValueError(f"Unknown dataset mode: {mode}")
 
@@ -141,7 +208,13 @@ def build_place_top3_dataset(db_path: Path, output_path: Path, mode: str = "late
     with sqlite3.connect(db_path) as conn:
         df = pd.read_sql_query(PLACE_TOP3_BASE_QUERY, conn)
 
-    df = df[FEATURE_COLUMNS_BY_MODE[mode]]
+    if history_features:
+        df = _append_history_features(df)
+
+    columns = FEATURE_COLUMNS_BY_MODE[mode]
+    if history_features:
+        columns = columns[:-1] + HISTORY_FEATURE_COLUMNS + columns[-1:]
+    df = df[columns]
 
     try:
         df.to_parquet(output_path, index=False, engine=engine)

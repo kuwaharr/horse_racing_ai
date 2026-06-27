@@ -137,6 +137,14 @@ python scripts\build_place_top3_dataset.py --mode late --engine fastparquet
 python scripts\build_place_top3_dataset.py --mode early --engine fastparquet
 ```
 
+過去成績特徴量を追加する場合:
+
+```powershell
+python scripts\build_place_top3_dataset.py --mode early --engine fastparquet --history-features
+```
+
+この場合のデフォルト出力先は`D:\horse_racing_ai\data\feature\place_top3_early_history_dataset.parquet`です。
+
 出力先を指定する場合:
 
 ```powershell
