@@ -51,6 +51,26 @@ RULE_TIERS = [
     },
 ]
 
+NO_HORSE_ID_HIGH_RETURN_TIERS = [
+    {
+        "name": "high_return_no_horse_id",
+        "description": "horse_id dropped model, fewer bets, selected tracks",
+        "pred_min": 0.45,
+        "odds_min": 3.0,
+        "odds_max": 6.0,
+        "distance_min": 1800,
+        "distance_max": 2200,
+        "include_track_ids": None,
+        "exclude_track_ids": [3, 7, 10],
+        "surface_id": None,
+    },
+]
+
+TIER_SETS = {
+    "affinity_lift": RULE_TIERS,
+    "no_horse_id_high_return": NO_HORSE_ID_HIGH_RETURN_TIERS,
+}
+
 
 def _format_pct(value: float | None) -> str:
     return "n/a" if value is None else f"{value:.2f}%"
@@ -90,6 +110,7 @@ def main() -> None:
     arg_parser.add_argument("--predictions", type=Path, default=DEFAULT_PREDICTIONS)
     arg_parser.add_argument("--engine", choices=["auto", "pyarrow", "fastparquet"], default="auto")
     arg_parser.add_argument("--stake", type=float, default=100.0)
+    arg_parser.add_argument("--tier-set", choices=sorted(TIER_SETS), default="affinity_lift")
     args = arg_parser.parse_args()
 
     try:
@@ -98,9 +119,10 @@ def main() -> None:
         raise RuntimeError("保存済み予測のルール段階評価には pandas が必要です。") from e
 
     predictions = pd.read_parquet(args.predictions, engine=args.engine)
-    rows = [_summarize_tier(predictions, tier, args.stake) for tier in RULE_TIERS]
+    rows = [_summarize_tier(predictions, tier, args.stake) for tier in TIER_SETS[args.tier_set]]
 
     print(f"Predictions: {args.predictions}")
+    print(f"Tier set: {args.tier_set}")
     print(f"Rows: {len(predictions):,}")
     print(f"Races: {int(predictions['race_id'].nunique()):,}")
     print("")

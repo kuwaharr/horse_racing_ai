@@ -8,7 +8,7 @@ if str(ROOT_DIR) not in sys.path:
 
 from src.data.paths import MODEL_DIR
 from src.models.place_top3_lgbm import _apply_fixed_rule
-from scripts.evaluate_rule_tiers_from_predictions import RULE_TIERS
+from scripts.evaluate_rule_tiers_from_predictions import TIER_SETS
 
 
 DEFAULT_PREDICTIONS = MODEL_DIR / "catboost_place_top3_predictions.parquet"
@@ -54,6 +54,7 @@ def main() -> None:
     arg_parser.add_argument("--predictions", type=Path, default=DEFAULT_PREDICTIONS)
     arg_parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     arg_parser.add_argument("--engine", choices=["auto", "pyarrow", "fastparquet"], default="auto")
+    arg_parser.add_argument("--tier-set", choices=sorted(TIER_SETS), default="affinity_lift")
     args = arg_parser.parse_args()
 
     try:
@@ -63,7 +64,7 @@ def main() -> None:
 
     predictions = pd.read_parquet(args.predictions, engine=args.engine)
     selections = pd.concat(
-        [_tier_selections(predictions, tier) for tier in RULE_TIERS],
+        [_tier_selections(predictions, tier) for tier in TIER_SETS[args.tier_set]],
         ignore_index=True,
     )
     selections["place_odds_mid"] = (selections["place_odds_min"] + selections["place_odds_max"]) / 2
@@ -93,6 +94,7 @@ def main() -> None:
     selections[output_columns].to_csv(args.output, index=False, encoding="utf-8-sig")
 
     print(f"Predictions: {args.predictions}")
+    print(f"Tier set: {args.tier_set}")
     print(f"Output: {args.output}")
     print(f"Rows: {len(selections):,}")
     print(f"Races: {int(selections['race_id'].nunique()):,}")

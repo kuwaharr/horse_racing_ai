@@ -278,6 +278,14 @@ python scripts\evaluate_rule_tiers_from_predictions.py --engine fastparquet --pr
 python scripts\export_rule_tier_selections.py --engine fastparquet --predictions "D:\horse_racing_ai\data\model\catboost_place_top3_predictions_affinity_lift_trial.parquet" --output "D:\horse_racing_ai\data\model\rule_tier_selections_affinity_lift_trial.csv"
 ```
 
+`horse_id`を学習から除外したモデルは、高回収寄りだけ派生候補として比較します。中間・買い目多めでは悪化したため、標準の3候補とは分けて扱います。
+
+```powershell
+python scripts\evaluate_rule_tiers_from_predictions.py --engine fastparquet --tier-set no_horse_id_high_return --predictions "D:\horse_racing_ai\data\model\catboost_place_top3_predictions_affinity_lift_no_horse_id.parquet"
+```
+
+この派生候補は、`pred_top3>=0.45`、複勝オッズ中間値`[3.0,6.0)`、距離`[1800,2200)`、開催場`3,7,10`除外で79レース、94点、46的中、回収率187.18%、最低fold回収率132.92%でした。
+
 特徴量グループごとの影響を確認する場合:
 
 ```powershell
