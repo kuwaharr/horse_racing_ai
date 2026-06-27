@@ -306,3 +306,66 @@ def evaluate_fixed_place_top3_catboost_rule_walk_forward(
         "by_track": _fixed_rule_breakdown(all_selected, "track_id", stake),
         "by_surface": _fixed_rule_breakdown(all_selected, "surface_id", stake),
     }
+
+
+def build_catboost_walk_forward_predictions(
+    training_dataset_path: Path,
+    odds_dataset_path: Path,
+    engine: str = "auto",
+    n_splits: int = 4,
+    min_train_ratio: float = 0.5,
+    stake: float = 100.0,
+) -> dict[str, Any]:
+    training_df = _read_parquet(training_dataset_path, engine)
+    odds_df = _read_parquet(odds_dataset_path, engine)
+
+    dates = sorted(training_df["date"].dropna().unique())
+    splits = _make_walk_forward_splits(dates, n_splits=n_splits, min_train_ratio=min_train_ratio)
+
+    prediction_rows = []
+    fold_reports = []
+    for fold_idx, (test_start, test_end) in enumerate(splits, start=1):
+        train_df, test_df = _split_by_start_date(training_df, test_start, test_end)
+        split_report = _fit_and_evaluate_catboost_split(
+            train_df=train_df,
+            test_df=test_df,
+            odds_df=odds_df,
+            stake=stake,
+            min_rule_selections=1,
+        )
+        eval_df = split_report["eval_df"].copy()
+        eval_df["fold"] = fold_idx
+        eval_df["test_start"] = test_start
+        eval_df["test_end"] = test_end
+        prediction_rows.append(eval_df)
+        fold_reports.append(
+            {
+                "fold": fold_idx,
+                "test_start": test_start,
+                "test_end": test_end,
+                "train_rows": len(train_df),
+                "train_races": int(train_df["race_id"].nunique()),
+                "test_rows": len(test_df),
+                "test_races": int(test_df["race_id"].nunique()),
+                "auc": split_report["metrics"]["auc"],
+                "logloss": split_report["metrics"]["logloss"],
+                "brier": split_report["metrics"]["brier"],
+            }
+        )
+
+    try:
+        import pandas as pd
+    except ModuleNotFoundError as e:
+        raise RuntimeError("CatBoost予測保存には pandas が必要です。") from e
+
+    predictions = pd.concat(prediction_rows, ignore_index=True) if prediction_rows else pd.DataFrame()
+    return {
+        "training_dataset_path": str(training_dataset_path),
+        "odds_dataset_path": str(odds_dataset_path),
+        "rows": len(training_df),
+        "races": int(training_df["race_id"].nunique()),
+        "n_splits": len(fold_reports),
+        "min_train_ratio": min_train_ratio,
+        "folds": fold_reports,
+        "predictions": predictions,
+    }

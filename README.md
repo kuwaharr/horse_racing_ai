@@ -202,6 +202,21 @@ python scripts\evaluate_fixed_place_top3_catboost_rule.py --engine fastparquet -
 
 現時点の代表結果は、CatBoostで`pred_top3>=0.40`、複勝オッズ中間値`[3.0,5.0)`、距離`[1800,2200)`を買う条件です。walk-forward 4 foldで129レース、149点、63的中、的中率42.28%、複勝オッズ中間値ベース回収率154.53%でした。
 
+CatBoostのwalk-forward予測を保存し、重い再学習を避けて買い条件だけを高速に検証する場合:
+
+```powershell
+python scripts\generate_catboost_predictions.py --engine fastparquet
+python scripts\evaluate_fixed_rule_from_predictions.py --engine fastparquet --pred-min 0.40
+```
+
+保存済み予測のデフォルト出力先は`D:\horse_racing_ai\data\model\catboost_place_top3_predictions.parquet`です。例えば開催場`3,7,10`を除外する条件は次のように確認できます。
+
+```powershell
+python scripts\evaluate_fixed_rule_from_predictions.py --engine fastparquet --pred-min 0.40 --exclude-track-ids "3,7,10"
+```
+
+この条件はwalk-forward 4 foldで119レース、138点、60的中、的中率43.48%、複勝オッズ中間値ベース回収率159.17%でした。より絞るなら開催場`3,7,8,10`除外で82レース、93点、43的中、回収率168.28%でしたが、買い点数が少なくなるため主候補は`3,7,10`除外とします。
+
 有望な固定ルールを詳細評価する場合:
 
 ```powershell
