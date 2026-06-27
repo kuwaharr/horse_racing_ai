@@ -743,31 +743,37 @@ def format_fixed_rule_report(report: dict[str, Any]) -> str:
         ),
         "",
         "Overall",
-        "selections  hits  hit_rate  return_min  return_mid  return_max",
+        "races  selections  hits  hit_rate  return_min  return_mid  return_max",
         (
-            f"{overall['selections']:>10,}  {overall['hits']:>4,}  "
+            f"{overall['races']:>5,}  {overall['selections']:>10,}  {overall['hits']:>4,}  "
             f"{overall['hit_rate_pct']:>7.2f}%  {overall['return_min_pct']:>9.2f}%  "
             f"{overall['return_mid_pct']:>9.2f}%  {overall['return_max_pct']:>9.2f}%"
         ),
         "",
         "Fold results",
-        "fold  test_start  test_end    train_rows  selections  hits  hit_rate  return_min  return_mid  return_max",
+        "fold  test_start  test_end    train_rows  races  selections  hits  hit_rate  return_min  return_mid  return_max",
     ]
     for row in report["folds"]:
         test_end = row["test_end"] or "end"
         lines.append(
             f"{row['fold']:>4}  {row['test_start']}  {test_end:<10}  "
-            f"{row['train_rows']:>10,}  "
+            f"{row['train_rows']:>10,}  {row['races']:>5,}  "
             f"{row['selections']:>10,}  {row['hits']:>4,}  "
             f"{row['hit_rate_pct']:>7.2f}%  {row['return_min_pct']:>9.2f}%  "
             f"{row['return_mid_pct']:>9.2f}%  {row['return_max_pct']:>9.2f}%"
         )
 
     for section_name, key in [("Monthly", "by_month"), ("Track", "by_track"), ("Surface", "by_surface")]:
-        lines.extend(["", f"{section_name} breakdown", "value       selections  hits  hit_rate  return_min  return_mid  return_max"])
+        lines.extend(
+            [
+                "",
+                f"{section_name} breakdown",
+                "value       races  selections  hits  hit_rate  return_min  return_mid  return_max",
+            ]
+        )
         for row in report[key]:
             lines.append(
-                f"{row['group_value']:<10}  {row['selections']:>10,}  {row['hits']:>4,}  "
+                f"{row['group_value']:<10}  {row['races']:>5,}  {row['selections']:>10,}  {row['hits']:>4,}  "
                 f"{row['hit_rate_pct']:>7.2f}%  {row['return_min_pct']:>9.2f}%  "
                 f"{row['return_mid_pct']:>9.2f}%  {row['return_max_pct']:>9.2f}%"
             )
