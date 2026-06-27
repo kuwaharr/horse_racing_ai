@@ -161,6 +161,12 @@ python scripts\evaluate_place_top3_lgbm.py --engine fastparquet
 
 このLightGBM評価では、学習特徴量に人気、オッズ、馬体重を含めません。複勝オッズはテスト期間の回収率計算にだけ使います。
 
+買い条件のしきい値を指定する場合:
+
+```powershell
+python scripts\evaluate_place_top3_lgbm.py --engine fastparquet --pred-thresholds "0.3,0.4,0.5" --ev-thresholds "1.0,1.1,1.2"
+```
+
 ## 実装メモ
 
 - パス定義は`src/data/paths.py`にあります

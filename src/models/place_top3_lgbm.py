@@ -78,12 +78,49 @@ def _strategy_report(df, score_col: str, ascending: bool, stake: float, top_k_va
     return results
 
 
+def _threshold_report(
+    df,
+    score_col: str,
+    thresholds: list[float],
+    stake: float,
+) -> list[dict[str, Any]]:
+    results = []
+    scored = df.dropna(subset=[score_col, "place_odds_min", "place_odds_max"]).copy()
+    scored["place_odds_mid"] = (scored["place_odds_min"] + scored["place_odds_max"]) / 2
+
+    for threshold in thresholds:
+        selected = scored[scored[score_col] >= threshold].copy()
+        selections = len(selected)
+        hits = int(selected["target_top3"].sum())
+        stake_total = selections * stake
+        return_min = float((selected["target_top3"] * selected["place_odds_min"] * stake).sum())
+        return_mid = float((selected["target_top3"] * selected["place_odds_mid"] * stake).sum())
+        return_max = float((selected["target_top3"] * selected["place_odds_max"] * stake).sum())
+        results.append(
+            {
+                "score": score_col,
+                "threshold": threshold,
+                "races": int(selected["race_id"].nunique()),
+                "selections": selections,
+                "hits": hits,
+                "hit_rate_pct": None if selections == 0 else hits / selections * 100,
+                "return_min_pct": None if stake_total == 0 else return_min / stake_total * 100,
+                "return_mid_pct": None if stake_total == 0 else return_mid / stake_total * 100,
+                "return_max_pct": None if stake_total == 0 else return_max / stake_total * 100,
+            }
+        )
+
+    return results
+
+
 def evaluate_place_top3_lgbm(
     early_dataset_path: Path,
     late_dataset_path: Path,
     engine: str = "auto",
     test_ratio: float = 0.2,
     stake: float = 100.0,
+    pred_thresholds: list[float] | None = None,
+    expected_value_thresholds: list[float] | None = None,
 ) -> dict[str, Any]:
     try:
         from lightgbm import LGBMClassifier
@@ -140,6 +177,16 @@ def evaluate_place_top3_lgbm(
         _strategy_report(eval_df, "expected_value_mid", ascending=False, stake=stake, top_k_values=[1, 2, 3])
     )
 
+    if pred_thresholds is None:
+        pred_thresholds = [0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6]
+    if expected_value_thresholds is None:
+        expected_value_thresholds = [0.8, 0.9, 1.0, 1.1, 1.2, 1.3]
+
+    threshold_results = []
+    threshold_results.extend(_threshold_report(eval_df, "pred_top3", pred_thresholds, stake=stake))
+    threshold_results.extend(_threshold_report(eval_df, "expected_value_min", expected_value_thresholds, stake=stake))
+    threshold_results.extend(_threshold_report(eval_df, "expected_value_mid", expected_value_thresholds, stake=stake))
+
     importance = sorted(
         zip(feature_cols, model.feature_importances_),
         key=lambda x: int(x[1]),
@@ -160,6 +207,7 @@ def evaluate_place_top3_lgbm(
         "categorical_features": categorical_cols,
         "metrics": metric_report,
         "strategies": strategy_results,
+        "thresholds": threshold_results,
         "feature_importance": importance[:15],
     }
 
@@ -191,6 +239,27 @@ def format_lgbm_report(report: dict[str, Any]) -> str:
             f"{row['selections']:>10,}  {row['hits']:>4,}  "
             f"{row['hit_rate_pct']:>7.2f}%  {row['return_min_pct']:>9.2f}%  "
             f"{row['return_mid_pct']:>9.2f}%  {row['return_max_pct']:>9.2f}%"
+        )
+
+    lines.extend(
+        [
+            "",
+            "Threshold results on test period",
+            "score              threshold  races  selections  hits  hit_rate  return_min  return_mid  return_max",
+        ]
+    )
+    for row in report["thresholds"]:
+        hit_rate = row["hit_rate_pct"]
+        min_pct = row["return_min_pct"]
+        mid_pct = row["return_mid_pct"]
+        max_pct = row["return_max_pct"]
+        lines.append(
+            f"{row['score']:<19} {row['threshold']:>9.2f}  {row['races']:>5,}  "
+            f"{row['selections']:>10,}  {row['hits']:>4,}  "
+            f"{'n/a' if hit_rate is None else f'{hit_rate:.2f}%':>8}  "
+            f"{'n/a' if min_pct is None else f'{min_pct:.2f}%':>9}  "
+            f"{'n/a' if mid_pct is None else f'{mid_pct:.2f}%':>9}  "
+            f"{'n/a' if max_pct is None else f'{max_pct:.2f}%':>9}"
         )
 
     lines.extend(["", "Top feature importance"])
