@@ -187,6 +187,8 @@ def _apply_fixed_rule(
     distance_min: int | None,
     distance_max: int | None,
     track_id: int | None,
+    include_track_ids: list[int] | None,
+    exclude_track_ids: list[int] | None,
     surface_id: int | None,
 ):
     selected = df[
@@ -200,6 +202,10 @@ def _apply_fixed_rule(
         selected = selected[selected["distance"] < distance_max]
     if track_id is not None:
         selected = selected[selected["track_id"] == track_id]
+    if include_track_ids is not None:
+        selected = selected[selected["track_id"].isin(include_track_ids)]
+    if exclude_track_ids is not None:
+        selected = selected[~selected["track_id"].isin(exclude_track_ids)]
     if surface_id is not None:
         selected = selected[selected["surface_id"] == surface_id]
     return selected
@@ -599,6 +605,8 @@ def evaluate_fixed_place_top3_rule_walk_forward(
     distance_min: int | None = 1800,
     distance_max: int | None = 2200,
     track_id: int | None = None,
+    include_track_ids: list[int] | None = None,
+    exclude_track_ids: list[int] | None = None,
     surface_id: int | None = None,
 ) -> dict[str, Any]:
     early_df = _read_parquet(early_dataset_path, engine)
@@ -628,6 +636,8 @@ def evaluate_fixed_place_top3_rule_walk_forward(
             distance_min=distance_min,
             distance_max=distance_max,
             track_id=track_id,
+            include_track_ids=include_track_ids,
+            exclude_track_ids=exclude_track_ids,
             surface_id=surface_id,
         )
         selected = selected.copy()
@@ -670,6 +680,8 @@ def evaluate_fixed_place_top3_rule_walk_forward(
             "distance_min": distance_min,
             "distance_max": distance_max,
             "track_id": track_id,
+            "include_track_ids": include_track_ids,
+            "exclude_track_ids": exclude_track_ids,
             "surface_id": surface_id,
         },
         "overall": overall,
@@ -694,7 +706,10 @@ def format_fixed_rule_report(report: dict[str, Any]) -> str:
             f"pred_top3>={rule['pred_min']:.2f}, "
             f"odds_mid=[{rule['odds_min']:.1f},{rule['odds_max']:.1f}), "
             f"distance=[{rule['distance_min']},{rule['distance_max']}), "
-            f"track_id={rule['track_id']}, surface_id={rule['surface_id']}"
+            f"track_id={rule['track_id']}, "
+            f"include_track_ids={rule['include_track_ids']}, "
+            f"exclude_track_ids={rule['exclude_track_ids']}, "
+            f"surface_id={rule['surface_id']}"
         ),
         "",
         "Overall",

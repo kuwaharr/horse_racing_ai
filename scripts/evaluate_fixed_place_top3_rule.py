@@ -17,6 +17,12 @@ def _optional_int(value: str) -> int | None:
     return int(value)
 
 
+def _optional_int_list(value: str) -> list[int] | None:
+    if value.lower() in {"none", "null", ""}:
+        return None
+    return [int(v.strip()) for v in value.split(",") if v.strip()]
+
+
 def main() -> None:
     arg_parser = argparse.ArgumentParser()
     arg_parser.add_argument("--early-dataset", type=Path, default=FEAT_DIR / default_dataset_name("early", history_features=True))
@@ -31,6 +37,8 @@ def main() -> None:
     arg_parser.add_argument("--distance-min", type=_optional_int, default=1800)
     arg_parser.add_argument("--distance-max", type=_optional_int, default=2200)
     arg_parser.add_argument("--track-id", type=_optional_int, default=None)
+    arg_parser.add_argument("--include-track-ids", type=_optional_int_list, default=None)
+    arg_parser.add_argument("--exclude-track-ids", type=_optional_int_list, default=None)
     arg_parser.add_argument("--surface-id", type=_optional_int, default=None)
     args = arg_parser.parse_args()
 
@@ -47,6 +55,8 @@ def main() -> None:
         distance_min=args.distance_min,
         distance_max=args.distance_max,
         track_id=args.track_id,
+        include_track_ids=args.include_track_ids,
+        exclude_track_ids=args.exclude_track_ids,
         surface_id=args.surface_id,
     )
     print(format_fixed_rule_report(report))
