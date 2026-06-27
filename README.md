@@ -188,6 +188,8 @@ python scripts\evaluate_place_top3_lgbm.py --engine fastparquet --min-rule-selec
 python scripts\evaluate_place_top3_walk_forward.py --engine fastparquet
 ```
 
+walk-forward評価では、ルール全体の安定性に加えて、開催場、芝/ダート、距離帯、頭数帯ごとの成績も確認できます。
+
 ## 実装メモ
 
 - パス定義は`src/data/paths.py`にあります

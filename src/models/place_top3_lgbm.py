@@ -220,6 +220,62 @@ def _rule_grid_report(
     )
 
 
+def _rule_condition_report(
+    df,
+    pred_thresholds: list[float],
+    odds_ranges: list[tuple[float, float]],
+    stake: float,
+    min_selections: int,
+) -> list[dict[str, Any]]:
+    try:
+        import pandas as pd
+    except ModuleNotFoundError as e:
+        raise RuntimeError("条件別ルール分析には pandas が必要です。") from e
+
+    scored = df.dropna(subset=["pred_top3", "place_odds_min", "place_odds_max"]).copy()
+    scored["place_odds_mid"] = (scored["place_odds_min"] + scored["place_odds_max"]) / 2
+    scored["distance_band"] = pd.cut(
+        scored["distance"],
+        bins=[0, 1400, 1800, 2200, 10000],
+        labels=["under1400", "1400-1799", "1800-2199", "2200plus"],
+        include_lowest=True,
+        right=False,
+    )
+    scored["race_size_band"] = pd.cut(
+        scored["race_size"],
+        bins=[0, 10, 14, 19],
+        labels=["small", "medium", "large"],
+        include_lowest=True,
+        right=False,
+    )
+
+    condition_cols = ["track_id", "surface_id", "distance_band", "race_size_band"]
+    results = []
+    for pred_min in pred_thresholds:
+        for odds_min, odds_max in odds_ranges:
+            selected = scored[
+                (scored["pred_top3"] >= pred_min)
+                & (scored["place_odds_mid"] >= odds_min)
+                & (scored["place_odds_mid"] < odds_max)
+            ]
+            rule_key = f"pred>={pred_min:.2f}|odds=[{odds_min:.1f},{odds_max:.1f})"
+            for condition_col in condition_cols:
+                for condition_value, group in selected.groupby(condition_col, observed=True):
+                    summary = _selection_summary(group, stake)
+                    if summary["selections"] < min_selections:
+                        continue
+                    summary.update(
+                        {
+                            "rule_key": rule_key,
+                            "condition_col": condition_col,
+                            "condition_value": str(condition_value),
+                        }
+                    )
+                    results.append(summary)
+
+    return results
+
+
 def _fit_and_evaluate_split(
     train_df,
     test_df,
@@ -255,7 +311,18 @@ def _fit_and_evaluate_split(
 
     pred = model.predict_proba(test_x)[:, 1]
 
-    eval_df = test_df[["race_id", "date", "horse_number", "target_top3"]].copy()
+    eval_df = test_df[
+        [
+            "race_id",
+            "date",
+            "horse_number",
+            "target_top3",
+            "track_id",
+            "surface_id",
+            "distance",
+            "race_size",
+        ]
+    ].copy()
     eval_df["pred_top3"] = pred
 
     odds_cols = ["race_id", "horse_number", "place_odds_min", "place_odds_max"]
@@ -303,6 +370,13 @@ def _fit_and_evaluate_split(
         stake=stake,
         min_selections=min_rule_selections,
     )
+    rule_condition_results = _rule_condition_report(
+        eval_df,
+        pred_thresholds=[0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6],
+        odds_ranges=[(1.0, 1.5), (1.5, 2.0), (2.0, 3.0), (3.0, 5.0), (5.0, 10.0), (10.0, 1000.0)],
+        stake=stake,
+        min_selections=min_rule_selections,
+    )
 
     importance = sorted(
         zip(feature_cols, model.feature_importances_),
@@ -318,6 +392,7 @@ def _fit_and_evaluate_split(
         "thresholds": threshold_results,
         "bands": band_results,
         "rule_grid": rule_grid_results,
+        "rule_conditions": rule_condition_results,
         "feature_importance": importance[:15],
     }
 
@@ -449,7 +524,15 @@ def evaluate_place_top3_lgbm_walk_forward(
             rule_row["test_end"] = test_end
             rule_rows.append(rule_row)
 
+        for row in split_report["rule_conditions"]:
+            condition_row = dict(row)
+            condition_row["fold"] = fold_idx
+            condition_row["test_start"] = test_start
+            condition_row["test_end"] = test_end
+            rule_rows.append(condition_row)
+
     rule_summary = _summarize_rules(rule_rows, n_folds=len(fold_reports))
+    condition_summary = _summarize_condition_rules(rule_rows, n_folds=len(fold_reports))
 
     return {
         "early_dataset_path": str(early_dataset_path),
@@ -461,10 +544,12 @@ def evaluate_place_top3_lgbm_walk_forward(
         "min_rule_selections": min_rule_selections,
         "folds": fold_reports,
         "rule_summary": rule_summary[:20],
+        "condition_summary": condition_summary[:20],
     }
 
 
 def _summarize_rules(rule_rows: list[dict[str, Any]], n_folds: int) -> list[dict[str, Any]]:
+    rule_rows = [row for row in rule_rows if "condition_col" not in row]
     grouped: dict[str, list[dict[str, Any]]] = {}
     for row in rule_rows:
         grouped.setdefault(row["rule_key"], []).append(row)
@@ -481,6 +566,50 @@ def _summarize_rules(rule_rows: list[dict[str, Any]], n_folds: int) -> list[dict
         summaries.append(
             {
                 "rule_key": rule_key,
+                "folds_hit": len(rows),
+                "folds_total": n_folds,
+                "selections": selections,
+                "hits": hits,
+                "hit_rate_pct": None if selections == 0 else hits / selections * 100,
+                "return_min_pct": return_min,
+                "return_mid_pct": return_mid,
+                "return_max_pct": return_max,
+                "min_fold_return_mid_pct": min(row["return_mid_pct"] for row in rows),
+                "max_fold_return_mid_pct": max(row["return_mid_pct"] for row in rows),
+            }
+        )
+
+    return sorted(
+        summaries,
+        key=lambda row: (
+            row["folds_hit"] == row["folds_total"],
+            row["return_mid_pct"],
+            row["selections"],
+        ),
+        reverse=True,
+    )
+
+
+def _summarize_condition_rules(rule_rows: list[dict[str, Any]], n_folds: int) -> list[dict[str, Any]]:
+    condition_rows = [row for row in rule_rows if "condition_col" in row]
+    grouped: dict[tuple[str, str, str], list[dict[str, Any]]] = {}
+    for row in condition_rows:
+        key = (row["rule_key"], row["condition_col"], row["condition_value"])
+        grouped.setdefault(key, []).append(row)
+
+    summaries = []
+    for (rule_key, condition_col, condition_value), rows in grouped.items():
+        selections = sum(row["selections"] for row in rows)
+        hits = sum(row["hits"] for row in rows)
+        stake_proxy = selections
+        return_min = sum(row["return_min_pct"] * row["selections"] for row in rows) / stake_proxy
+        return_mid = sum(row["return_mid_pct"] * row["selections"] for row in rows) / stake_proxy
+        return_max = sum(row["return_max_pct"] * row["selections"] for row in rows) / stake_proxy
+        summaries.append(
+            {
+                "rule_key": rule_key,
+                "condition_col": condition_col,
+                "condition_value": condition_value,
                 "folds_hit": len(rows),
                 "folds_total": n_folds,
                 "selections": selections,
@@ -536,6 +665,23 @@ def format_walk_forward_report(report: dict[str, Any]) -> str:
     for row in report["rule_summary"]:
         lines.append(
             f"{row['rule_key']:<30} {row['folds_hit']:>2}/{row['folds_total']:<2}  "
+            f"{row['selections']:>10,}  {row['hits']:>4,}  "
+            f"{row['hit_rate_pct']:>7.2f}%  {row['return_min_pct']:>9.2f}%  "
+            f"{row['return_mid_pct']:>9.2f}%  {row['return_max_pct']:>9.2f}%  "
+            f"{row['min_fold_return_mid_pct']:>7.2f}%  {row['max_fold_return_mid_pct']:>7.2f}%"
+        )
+
+    lines.extend(
+        [
+            "",
+            f"Condition rule summary (min selections per fold: {report['min_rule_selections']})",
+            "rule_key                       condition        folds  selections  hits  hit_rate  return_min  return_mid  return_max  min_mid  max_mid",
+        ]
+    )
+    for row in report["condition_summary"]:
+        condition = f"{row['condition_col']}={row['condition_value']}"
+        lines.append(
+            f"{row['rule_key']:<30} {condition:<16} {row['folds_hit']:>2}/{row['folds_total']:<2}  "
             f"{row['selections']:>10,}  {row['hits']:>4,}  "
             f"{row['hit_rate_pct']:>7.2f}%  {row['return_min_pct']:>9.2f}%  "
             f"{row['return_mid_pct']:>9.2f}%  {row['return_max_pct']:>9.2f}%  "
