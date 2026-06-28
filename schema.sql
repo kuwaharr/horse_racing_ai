@@ -49,6 +49,9 @@ CREATE TABLE IF NOT EXISTS runner (
     FOREIGN KEY (race_id) REFERENCES race(race_id) ON DELETE CASCADE
 );
 
+CREATE INDEX IF NOT EXISTS idx_runner_horse_id
+    ON runner(horse_id);
+
 CREATE TABLE IF NOT EXISTS horse (
     horse_id TEXT PRIMARY KEY,
     horse_name TEXT,

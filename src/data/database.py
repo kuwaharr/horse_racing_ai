@@ -122,22 +122,43 @@ def get_horses_for_pedigree_fetch(
     cur: sqlite3.Cursor,
     limit: int,
     include_failed: bool = False,
+    order_by: str = "updated_at",
 ) -> list[dict]:
     ensure_horse_table(cur)
+    if order_by not in {"updated_at", "runner_count"}:
+        raise ValueError(f"Unknown pedigree fetch order: {order_by}")
+
     statuses = ("pending", "failed") if include_failed else ("pending",)
     placeholders = ", ".join(["?"] * len(statuses))
+    if order_by == "runner_count":
+        order_sql = "runner_count DESC, h.updated_at, h.horse_id"
+    else:
+        order_sql = "h.updated_at, h.horse_id"
+
     cur.execute(
         f"""
-        SELECT horse_id, horse_name, pedigree_fetch_status
-        FROM horse
-        WHERE pedigree_fetch_status IN ({placeholders})
-        ORDER BY updated_at, horse_id
+        SELECT
+            h.horse_id,
+            h.horse_name,
+            h.pedigree_fetch_status,
+            COUNT(runner.horse_id) AS runner_count
+        FROM horse AS h
+        LEFT JOIN runner
+            ON runner.horse_id = h.horse_id
+        WHERE h.pedigree_fetch_status IN ({placeholders})
+        GROUP BY h.horse_id, h.horse_name, h.pedigree_fetch_status, h.updated_at
+        ORDER BY {order_sql}
         LIMIT ?
         """,
         [*statuses, limit],
     )
     return [
-        {"horse_id": row[0], "horse_name": row[1], "pedigree_fetch_status": row[2]}
+        {
+            "horse_id": row[0],
+            "horse_name": row[1],
+            "pedigree_fetch_status": row[2],
+            "runner_count": row[3],
+        }
         for row in cur.fetchall()
     ]
 

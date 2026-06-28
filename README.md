@@ -90,6 +90,12 @@ DBを初期化する場合:
 sqlite3 D:\horse_racing_ai\data\hr.db ".read schema.sql"
 ```
 
+既存DBに検索用インデックスを追加する場合。DB書き込みを伴うため、スクレイピングを止めた状態で実行してください:
+
+```powershell
+python scripts\ensure_db_indexes.py
+```
+
 データ保存先を変更したい場合は、環境変数`HORSE_RACING_DATA_ROOT`で上書きできます。
 
 ```powershell
@@ -141,6 +147,16 @@ python scripts\fetch_pending_horse_pedigrees.py --limit 100 --sleep 1.5
 ```
 
 血統取得は`https://db.netkeiba.com/horse/ped/<horse_id>/`から取得します。`--limit`は1回の実行で取得する最大頭数、`--sleep`は1頭ごとの待機秒数です。失敗済みの馬も再試行する場合:
+
+モデル用データの血統カバー率を早く上げたい場合は、出走回数が多い馬から優先して取得します:
+
+```powershell
+python scripts\fetch_pending_horse_pedigrees.py --limit 100 --sleep 1.5 --order-by runner_count
+```
+
+`--order-by runner_count`は`runner.horse_id`を集計するため、既存DBでは先に`python scripts\ensure_db_indexes.py`を実行しておくと高速です。
+
+失敗済みの馬も再試行する場合:
 
 ```powershell
 python scripts\fetch_pending_horse_pedigrees.py --limit 100 --sleep 1.5 --include-failed

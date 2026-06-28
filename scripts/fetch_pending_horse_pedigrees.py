@@ -40,6 +40,11 @@ def main() -> None:
     arg_parser.add_argument("--sleep", type=float, default=1.0)
     arg_parser.add_argument("--include-failed", action="store_true")
     arg_parser.add_argument("--horse-id", default=None)
+    arg_parser.add_argument(
+        "--order-by",
+        choices=["updated_at", "runner_count"],
+        default="updated_at",
+    )
     args = arg_parser.parse_args()
 
     fetched = 0
@@ -56,6 +61,7 @@ def main() -> None:
                 cur,
                 limit=args.limit,
                 include_failed=args.include_failed,
+                order_by=args.order_by,
             )
         print(f"DB: {args.db}")
         print(f"Targets: {len(horses):,}")
@@ -63,7 +69,9 @@ def main() -> None:
         for i, horse in enumerate(horses, start=1):
             horse_id = horse["horse_id"]
             url = make_horse_pedigree_url(horse_id)
-            print(f"{i}/{len(horses)} horse_id={horse_id} url={url}")
+            runner_count = horse.get("runner_count")
+            runner_count_text = "" if runner_count is None else f" runner_count={runner_count}"
+            print(f"{i}/{len(horses)} horse_id={horse_id}{runner_count_text} url={url}")
 
             soup_result = make_soup(url)
             if not soup_result.success:
