@@ -17,6 +17,21 @@ DEFAULT_SECONDARY_PREDICTIONS = MODEL_DIR / "catboost_place_top3_predictions_aff
 
 CONSENSUS_RULES = [
     {
+        "name": "union_value_odds",
+        "description": "base >= 0.50 or no_horse_id >= 0.40, odds 4.0-6.0",
+        "mode": "union",
+        "base_pred_min": 0.50,
+        "secondary_pred_min": 0.40,
+        "avg_pred_min": None,
+        "odds_min": 4.0,
+        "odds_max": 6.0,
+        "distance_min": 1800,
+        "distance_max": 2200,
+        "include_track_ids": None,
+        "exclude_track_ids": [7, 10],
+        "surface_id": None,
+    },
+    {
         "name": "consensus_high_return",
         "description": "base >= 0.45 and no_horse_id >= 0.40, selected tracks",
         "mode": "intersection",
