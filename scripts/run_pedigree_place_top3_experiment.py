@@ -38,6 +38,51 @@ def _format_pct(value: float | None) -> str:
     return "n/a" if value is None else f"{value:.2f}%"
 
 
+def _dataset_pedigree_coverage(training_dataset: Path, engine: str) -> dict[str, Any]:
+    try:
+        import pandas as pd
+    except ModuleNotFoundError as e:
+        raise RuntimeError("血統カバー率確認には pandas が必要です。") from e
+
+    try:
+        df = pd.read_parquet(training_dataset, engine=engine, columns=["race_id", "pedigree_available"])
+    except TypeError:
+        df = pd.read_parquet(training_dataset, engine=engine)[["race_id", "pedigree_available"]]
+    except ValueError as e:
+        if "pedigree_available" not in str(e):
+            raise
+        raise RuntimeError(
+            "学習データセットに pedigree_available 列がありません。"
+            " `python scripts\\build_place_top3_dataset.py --kind training --engine fastparquet` "
+            "で血統対応後のParquetを再生成してください。"
+        ) from e
+
+    available = df["pedigree_available"].fillna(0).astype(int)
+    rows = len(df)
+    races = int(df["race_id"].nunique())
+    available_rows = int(available.sum())
+    race_has_any = df.assign(_pedigree_available=available).groupby("race_id")["_pedigree_available"].max()
+    races_with_any = int(race_has_any.sum())
+    return {
+        "rows": rows,
+        "races": races,
+        "available_rows": available_rows,
+        "row_pct": 0.0 if rows == 0 else available_rows / rows * 100,
+        "races_with_any": races_with_any,
+        "race_any_pct": 0.0 if races == 0 else races_with_any / races * 100,
+    }
+
+
+def _print_pedigree_coverage(coverage: dict[str, Any]) -> None:
+    print("")
+    print("Training dataset pedigree coverage")
+    print(f"rows: {coverage['available_rows']:,} / {coverage['rows']:,} ({_format_pct(coverage['row_pct'])})")
+    print(
+        "races with any pedigree: "
+        f"{coverage['races_with_any']:,} / {coverage['races']:,} ({_format_pct(coverage['race_any_pct'])})"
+    )
+
+
 def _write_predictions(
     training_dataset: Path,
     odds_dataset: Path,
@@ -167,11 +212,24 @@ def main() -> None:
     arg_parser.add_argument("--max-buy-rate", type=float, default=22.0)
     arg_parser.add_argument("--min-selections", type=int, default=70)
     arg_parser.add_argument("--min-fold-selections", type=int, default=10)
+    arg_parser.add_argument("--min-pedigree-row-coverage", type=float, default=20.0)
+    arg_parser.add_argument("--force-low-coverage", action="store_true")
     arg_parser.add_argument("--top-n", type=int, default=10)
     args = arg_parser.parse_args()
 
     print(f"Training dataset: {args.training_dataset}")
     print(f"Evaluation odds dataset: {args.odds_dataset}")
+    try:
+        coverage = _dataset_pedigree_coverage(args.training_dataset, args.engine)
+    except RuntimeError as e:
+        raise SystemExit(str(e)) from e
+    _print_pedigree_coverage(coverage)
+    if coverage["row_pct"] < args.min_pedigree_row_coverage and not args.force_low_coverage:
+        raise SystemExit(
+            "Pedigree row coverage is too low: "
+            f"{coverage['row_pct']:.2f}% < {args.min_pedigree_row_coverage:.2f}%. "
+            "Rebuild the dataset after fetching more pedigrees, or pass --force-low-coverage."
+        )
 
     if not args.skip_predictions:
         pedigree_report = _write_predictions(

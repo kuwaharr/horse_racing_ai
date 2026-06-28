@@ -217,6 +217,12 @@ python scripts\build_place_top3_dataset.py --kind eval-odds --engine fastparquet
 python scripts\run_pedigree_place_top3_experiment.py --engine fastparquet
 ```
 
+この実験は、学習データセット内の血統行カバー率がデフォルトで20%未満の場合は停止します。低カバー率でも動作確認だけ行う場合:
+
+```powershell
+python scripts\run_pedigree_place_top3_experiment.py --engine fastparquet --force-low-coverage
+```
+
 既に予測Parquetを作成済みで、評価だけやり直す場合:
 
 ```powershell
