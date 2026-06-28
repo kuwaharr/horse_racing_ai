@@ -62,8 +62,15 @@ def _portfolio_selections(predictions, rules_by_name: dict[str, dict[str, Any]],
         selected["portfolio_rule_name"] = rule_name
         parts.append(selected)
     raw = pd.concat(parts, ignore_index=True)
+    matched_rules = (
+        raw.groupby(["race_id", "horse_number"], observed=True)["portfolio_rule_name"]
+        .apply(lambda values: ",".join(sorted(set(values))))
+        .rename("matched_rules")
+        .reset_index()
+    )
     deduped = raw.sort_values(["race_id", "horse_number", "portfolio_rule_name"])
-    return deduped.drop_duplicates(["race_id", "horse_number"])
+    deduped = deduped.drop_duplicates(["race_id", "horse_number"])
+    return deduped.merge(matched_rules, on=["race_id", "horse_number"], how="left")
 
 
 def _summarize_portfolio(
@@ -89,6 +96,20 @@ def _summarize_portfolio(
     return result
 
 
+def _summarize_group(selected, stake: float) -> dict[str, Any]:
+    summary = _selection_summary(selected, stake)
+    fold_returns = []
+    fold_selections = []
+    for _, group in selected.groupby("fold", observed=True):
+        fold_summary = _selection_summary(group, stake)
+        fold_returns.append(fold_summary["return_mid_pct"])
+        fold_selections.append(fold_summary["selections"])
+    summary["min_fold_return_mid_pct"] = min(fold_returns) if fold_returns else None
+    summary["max_fold_return_mid_pct"] = max(fold_returns) if fold_returns else None
+    summary["min_fold_selections"] = min(fold_selections) if fold_selections else 0
+    return summary
+
+
 def main() -> None:
     arg_parser = argparse.ArgumentParser()
     arg_parser.add_argument("--base-predictions", type=Path, default=DEFAULT_BASE_PREDICTIONS)
@@ -99,6 +120,11 @@ def main() -> None:
     )
     arg_parser.add_argument("--engine", choices=["auto", "pyarrow", "fastparquet"], default="auto")
     arg_parser.add_argument("--stake", type=float, default=100.0)
+    arg_parser.add_argument(
+        "--breakdown-portfolio",
+        choices=[portfolio["name"] for portfolio in PORTFOLIOS],
+        default=None,
+    )
     args = arg_parser.parse_args()
 
     predictions = _load_consensus_predictions(
@@ -130,6 +156,27 @@ def main() -> None:
             f"{_format_pct(row['max_fold_return_mid_pct']):>7}  "
             f"{row['min_fold_selections']:>10,}  {', '.join(row['rules'])}"
         )
+
+    if args.breakdown_portfolio is not None:
+        portfolios_by_name = {portfolio["name"]: portfolio for portfolio in PORTFOLIOS}
+        portfolio = portfolios_by_name[args.breakdown_portfolio]
+        selected = _portfolio_selections(predictions, rules_by_name, portfolio["rules"])
+        print("")
+        print(f"Breakdown for {args.breakdown_portfolio}")
+        print(
+            "matched_rules                         races  selections  hits  hit_rate  "
+            "return_mid  min_mid  max_mid  min_fold_n"
+        )
+        for matched_rules, group in selected.groupby("matched_rules", sort=False):
+            row = _summarize_group(group, args.stake)
+            print(
+                f"{matched_rules:<35} {row['races']:>5,}  {row['selections']:>10,}  "
+                f"{row['hits']:>4,}  {_format_pct(row['hit_rate_pct']):>8}  "
+                f"{_format_pct(row['return_mid_pct']):>10}  "
+                f"{_format_pct(row['min_fold_return_mid_pct']):>7}  "
+                f"{_format_pct(row['max_fold_return_mid_pct']):>7}  "
+                f"{row['min_fold_selections']:>10,}"
+            )
 
 
 if __name__ == "__main__":
