@@ -11,6 +11,7 @@ from src.data.database import (
     connect,
     get_horse_for_pedigree_fetch,
     get_horses_for_pedigree_fetch,
+    run_write_with_retry,
     update_horse_pedigree,
 )
 from src.data.paths import DB_PATH
@@ -40,6 +41,8 @@ def main() -> None:
     arg_parser.add_argument("--sleep", type=float, default=1.0)
     arg_parser.add_argument("--include-failed", action="store_true")
     arg_parser.add_argument("--horse-id", default=None)
+    arg_parser.add_argument("--db-retries", type=int, default=5)
+    arg_parser.add_argument("--db-retry-sleep", type=float, default=2.0)
     arg_parser.add_argument(
         "--order-by",
         choices=["updated_at", "runner_count"],
@@ -76,31 +79,43 @@ def main() -> None:
             soup_result = make_soup(url)
             if not soup_result.success:
                 failed += 1
-                update_horse_pedigree(
-                    cur,
-                    _failed_pedigree(horse_id, horse["horse_name"], soup_result.error or "fetch failed"),
+                run_write_with_retry(
+                    conn,
+                    lambda: update_horse_pedigree(
+                        cur,
+                        _failed_pedigree(horse_id, horse["horse_name"], soup_result.error or "fetch failed"),
+                    ),
+                    max_attempts=args.db_retries,
+                    sleep_sec=args.db_retry_sleep,
                 )
-                conn.commit()
                 time.sleep(args.sleep)
                 continue
 
             pedigree_result = extract_horse_pedigree(soup_result.value, horse_id)
             if not pedigree_result.success:
                 failed += 1
-                update_horse_pedigree(
-                    cur,
-                    _failed_pedigree(
-                        horse_id,
-                        horse["horse_name"],
-                        pedigree_result.error or "parse failed",
+                run_write_with_retry(
+                    conn,
+                    lambda: update_horse_pedigree(
+                        cur,
+                        _failed_pedigree(
+                            horse_id,
+                            horse["horse_name"],
+                            pedigree_result.error or "parse failed",
+                        ),
                     ),
+                    max_attempts=args.db_retries,
+                    sleep_sec=args.db_retry_sleep,
                 )
-                conn.commit()
                 time.sleep(args.sleep)
                 continue
 
-            update_horse_pedigree(cur, pedigree_result.value)
-            conn.commit()
+            run_write_with_retry(
+                conn,
+                lambda: update_horse_pedigree(cur, pedigree_result.value),
+                max_attempts=args.db_retries,
+                sleep_sec=args.db_retry_sleep,
+            )
             fetched += 1
             time.sleep(args.sleep)
 

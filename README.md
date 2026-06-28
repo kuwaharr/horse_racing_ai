@@ -155,6 +155,11 @@ python scripts\fetch_pending_horse_pedigrees.py --limit 100 --sleep 1.5 --order-
 ```
 
 `--order-by runner_count`は`runner.horse_id`を集計するため、既存DBでは先に`python scripts\ensure_db_indexes.py`を実行しておくと高速です。
+SQLiteは同時書き込みが1つに制限されます。別のスクレイピング処理と同時に動かす場合は、血統取得側がロック解除を待ってDB更新を再試行します。待ち時間を長めにする場合:
+
+```powershell
+python scripts\fetch_pending_horse_pedigrees.py --limit 100 --sleep 1.5 --order-by runner_count --db-retries 10 --db-retry-sleep 3
+```
 
 失敗済みの馬も再試行する場合:
 
@@ -178,6 +183,18 @@ python scripts\build_place_top3_dataset.py --kind training --engine fastparquet
 
 ```powershell
 python scripts\build_place_top3_dataset.py --kind eval-odds --engine fastparquet
+```
+
+血統特徴量あり/なしを比較し、購入率20%前後の合議ルール候補を探す場合:
+
+```powershell
+python scripts\run_pedigree_place_top3_experiment.py --engine fastparquet
+```
+
+既に予測Parquetを作成済みで、評価だけやり直す場合:
+
+```powershell
+python scripts\run_pedigree_place_top3_experiment.py --engine fastparquet --skip-predictions
 ```
 
 学習データセットのデフォルト出力先は`D:\horse_racing_ai\data\feature\place_top3_dataset.parquet`です。

@@ -1,5 +1,11 @@
 import sqlite3
+import time
+from collections.abc import Callable
 from pathlib import Path
+
+
+DEFAULT_SQLITE_TIMEOUT_SEC = 60.0
+DEFAULT_BUSY_TIMEOUT_MS = 60_000
 
 
 HORSE_SCHEMA_SQL = """
@@ -27,9 +33,28 @@ CREATE INDEX IF NOT EXISTS idx_horse_pedigree_fetch_status
 
 def connect(db_path: Path) -> sqlite3.Connection:
     db_path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(db_path)
+    conn = sqlite3.connect(db_path, timeout=DEFAULT_SQLITE_TIMEOUT_SEC)
     conn.execute("PRAGMA foreign_keys = ON")
+    conn.execute(f"PRAGMA busy_timeout = {DEFAULT_BUSY_TIMEOUT_MS}")
     return conn
+
+
+def run_write_with_retry(
+    conn: sqlite3.Connection,
+    write_fn: Callable[[], None],
+    max_attempts: int = 5,
+    sleep_sec: float = 2.0,
+) -> None:
+    for attempt in range(1, max_attempts + 1):
+        try:
+            write_fn()
+            conn.commit()
+            return
+        except sqlite3.OperationalError as e:
+            if "database is locked" not in str(e).lower() or attempt == max_attempts:
+                raise
+            conn.rollback()
+            time.sleep(sleep_sec * attempt)
 
 
 def ensure_horse_table(cur: sqlite3.Cursor) -> None:
