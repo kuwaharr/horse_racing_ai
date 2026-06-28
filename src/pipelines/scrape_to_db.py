@@ -7,6 +7,8 @@ from src.common.logger import get_logger
 from src.data.database import (
     connect,
     get_race_ids_in_db,
+    run_write_with_retry,
+    ensure_horse_table,
     upsert_horse_pending,
     upsert_place,
     upsert_race,
@@ -65,6 +67,70 @@ def sleep_between_requests(min_sec: float = 3.0, max_sec: float = 6.0) -> None:
 
 def sleep_backoff(min_sec: float = 30.0, max_sec: float = 60.0) -> None:
     time.sleep(random.uniform(min_sec, max_sec))
+
+
+def write_raw_race_to_db(race_id: str, raw_data: dict) -> bool:
+    with connect(DB_PATH) as conn:
+        cur = conn.cursor()
+
+        failed = False
+
+        r_normalized_race = normalize_race(raw_data["race"])
+        if not r_normalized_race.success:
+            logger.error("race_id=%s normalize_race failed %s", race_id, r_normalized_race.error)
+            failed = True
+
+        r_normalized_runners = normalize_runners(race_id, raw_data["runners"])
+        if not r_normalized_runners.success:
+            logger.error("race_id=%s normalize_runners failed %s", race_id, r_normalized_runners.error)
+            failed = True
+
+        r_normalized_win = normalize_win(race_id, raw_data["odds"]["win"])
+        if not r_normalized_win.success:
+            logger.error("race_id=%s normalize_win failed %s", race_id, r_normalized_win.error)
+            failed = True
+
+        r_normalized_place = normalize_place(race_id, raw_data["odds"]["place"])
+        if not r_normalized_place.success:
+            logger.error("race_id=%s normalize_place failed %s", race_id, r_normalized_place.error)
+            failed = True
+
+        r_normalized_wide = normalize_wide(race_id, raw_data["odds"]["wide"])
+        if not r_normalized_wide.success:
+            logger.error("race_id=%s normalize_wide failed %s", race_id, r_normalized_wide.error)
+            failed = True
+
+        r_normalized_trio = normalize_trio(race_id, raw_data["odds"]["trio"])
+        if not r_normalized_trio.success:
+            logger.error("race_id=%s normalize_trio failed %s", race_id, r_normalized_trio.error)
+            failed = True
+
+        if failed:
+            logger.error("Normalizing failed; skipping race_id=%s", race_id)
+            return False
+
+        def write() -> None:
+            upsert_race(cur, r_normalized_race.value)
+            ensure_horse_table(cur)
+            for runner in r_normalized_runners.value:
+                upsert_runner(cur, runner)
+                upsert_horse_pending(
+                    cur,
+                    runner.get("horse_id"),
+                    runner.get("horse_name"),
+                    ensure_table=False,
+                )
+            for odds in r_normalized_win.value:
+                upsert_win(cur, odds)
+            for odds in r_normalized_place.value:
+                upsert_place(cur, odds)
+            for odds in r_normalized_wide.value:
+                upsert_wide(cur, odds)
+            for odds in r_normalized_trio.value:
+                upsert_trio(cur, odds)
+
+        run_write_with_retry(conn, write)
+        return True
 
 
 def run(race_list_url: str, mode: str = "manual", limit: int | None = None) -> None:
@@ -164,65 +230,8 @@ def run(race_list_url: str, mode: str = "manual", limit: int | None = None) -> N
 
             raw_data = load_json(raw_data_file)
 
-            with connect(DB_PATH) as conn:
-                cur = conn.cursor()
-
-                failed = False
-
-                r_normalized_race = normalize_race(raw_data["race"])
-                if r_normalized_race.success:
-                    upsert_race(cur, r_normalized_race.value)
-                else:
-                    logger.error("race_id=%s normalize_race failed %s", race_id, r_normalized_race.error)
-                    failed = True
-
-                r_normalized_runners = normalize_runners(race_id, raw_data["runners"])
-                if r_normalized_runners.success:
-                    for runner in r_normalized_runners.value:
-                        upsert_runner(cur, runner)
-                        upsert_horse_pending(cur, runner.get("horse_id"), runner.get("horse_name"))
-                else:
-                    logger.error("race_id=%s normalize_runners failed %s", race_id, r_normalized_runners.error)
-                    failed = True
-
-                r_normalized_win = normalize_win(race_id, raw_data["odds"]["win"])
-                if r_normalized_win.success:
-                    for odds in r_normalized_win.value:
-                        upsert_win(cur, odds)
-                else:
-                    logger.error("race_id=%s normalize_win failed %s", race_id, r_normalized_win.error)
-                    failed = True
-
-                r_normalized_place = normalize_place(race_id, raw_data["odds"]["place"])
-                if r_normalized_place.success:
-                    for odds in r_normalized_place.value:
-                        upsert_place(cur, odds)
-                else:
-                    logger.error("race_id=%s normalize_place failed %s", race_id, r_normalized_place.error)
-                    failed = True
-
-                r_normalized_wide = normalize_wide(race_id, raw_data["odds"]["wide"])
-                if r_normalized_wide.success:
-                    for odds in r_normalized_wide.value:
-                        upsert_wide(cur, odds)
-                else:
-                    logger.error("race_id=%s normalize_wide failed %s", race_id, r_normalized_wide.error)
-                    failed = True
-
-                r_normalized_trio = normalize_trio(race_id, raw_data["odds"]["trio"])
-                if r_normalized_trio.success:
-                    for odds in r_normalized_trio.value:
-                        upsert_trio(cur, odds)
-                else:
-                    logger.error("race_id=%s normalize_trio failed %s", race_id, r_normalized_trio.error)
-                    failed = True
-
-                if failed:
-                    conn.rollback()
-                    logger.error("Normalizing/Upserting failed; skipping race_id=%s", race_id)
-                    continue
-
-                conn.commit()
+            if not write_raw_race_to_db(race_id, raw_data):
+                continue
 
             logger.info("Normalizing/Upserting done")
 

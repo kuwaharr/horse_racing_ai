@@ -62,7 +62,8 @@ def ensure_horse_table(cur: sqlite3.Cursor) -> None:
 
 
 def get_race_ids_in_db(db_path: Path) -> set:
-    with sqlite3.connect(db_path) as conn:
+    with sqlite3.connect(db_path, timeout=DEFAULT_SQLITE_TIMEOUT_SEC) as conn:
+        conn.execute(f"PRAGMA busy_timeout = {DEFAULT_BUSY_TIMEOUT_MS}")
         cur = conn.cursor()
         cur.execute("SELECT race_id FROM race")
         return {row[0] for row in cur.fetchall()}
@@ -92,10 +93,16 @@ def upsert_runner(cur: sqlite3.Cursor, runner: dict) -> None:
     cur.execute(sql, [runner[c] for c in cols])
 
 
-def upsert_horse_pending(cur: sqlite3.Cursor, horse_id: str | None, horse_name: str | None) -> None:
+def upsert_horse_pending(
+    cur: sqlite3.Cursor,
+    horse_id: str | None,
+    horse_name: str | None,
+    ensure_table: bool = True,
+) -> None:
     if not horse_id:
         return
-    ensure_horse_table(cur)
+    if ensure_table:
+        ensure_horse_table(cur)
     cur.execute(
         """
         INSERT INTO horse (
