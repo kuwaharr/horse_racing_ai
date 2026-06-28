@@ -119,26 +119,41 @@ def _print_prediction_report(label: str, output: Path, report: dict[str, Any]) -
         )
 
 
-def _print_portfolios(predictions, stake: float) -> None:
+def _write_csv(rows: list[dict[str, Any]], output: Path | None) -> None:
+    if output is None:
+        return
+    try:
+        import pandas as pd
+    except ModuleNotFoundError as e:
+        raise RuntimeError("CSV出力には pandas が必要です。") from e
+
+    output.parent.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame(rows).to_csv(output, index=False, encoding="utf-8-sig")
+    print(f"CSV output: {output}")
+
+
+def _print_portfolios(predictions, stake: float) -> list[dict[str, Any]]:
     total_races = int(predictions["race_id"].nunique())
     rules_by_name = {rule["name"]: rule for rule in CONSENSUS_RULES}
     rows = [
         _summarize_portfolio(predictions, rules_by_name, portfolio, stake)
         for portfolio in PORTFOLIOS
     ]
+    for row in rows:
+        row["buy_rate_pct"] = None if total_races == 0 else row["races"] / total_races * 100
 
     print("")
     print("Portfolio results")
     print("portfolio              races  buy_rate  selections  hits  hit_rate  return_mid  min_mid")
     for row in rows:
-        buy_rate_pct = None if total_races == 0 else row["races"] / total_races * 100
         print(
-            f"{row['name']:<22} {row['races']:>5,}  {_format_pct(buy_rate_pct):>8}  "
+            f"{row['name']:<22} {row['races']:>5,}  {_format_pct(row['buy_rate_pct']):>8}  "
             f"{row['selections']:>10,}  {row['hits']:>4,}  "
             f"{_format_pct(row['hit_rate_pct']):>8}  "
             f"{_format_pct(row['return_mid_pct']):>10}  "
             f"{_format_pct(row['min_fold_return_mid_pct']):>7}"
         )
+    return rows
 
 
 def _print_rule_search(
@@ -149,7 +164,7 @@ def _print_rule_search(
     min_selections: int,
     min_fold_selections: int,
     top_n: int,
-) -> None:
+) -> list[dict[str, Any]]:
     total_races = int(predictions["race_id"].nunique())
     results = []
     for rule in _candidate_rules(["intersection", "union", "average"]):
@@ -187,6 +202,7 @@ def _print_rule_search(
             f"{_format_pct(row['return_mid_pct']):>10}  "
             f"{_format_pct(row['min_fold_return_mid_pct']):>7}"
         )
+    return results
 
 
 def main() -> None:
@@ -214,6 +230,16 @@ def main() -> None:
     arg_parser.add_argument("--min-fold-selections", type=int, default=10)
     arg_parser.add_argument("--min-pedigree-row-coverage", type=float, default=20.0)
     arg_parser.add_argument("--force-low-coverage", action="store_true")
+    arg_parser.add_argument(
+        "--portfolio-output",
+        type=Path,
+        default=MODEL_DIR / "pedigree_place_top3_portfolios.csv",
+    )
+    arg_parser.add_argument(
+        "--rule-output",
+        type=Path,
+        default=MODEL_DIR / "pedigree_place_top3_rules.csv",
+    )
     arg_parser.add_argument("--top-n", type=int, default=10)
     args = arg_parser.parse_args()
 
@@ -262,8 +288,8 @@ def main() -> None:
     print("")
     print(f"Consensus rows: {len(predictions):,}")
     print(f"Consensus races: {int(predictions['race_id'].nunique()):,}")
-    _print_portfolios(predictions, args.stake)
-    _print_rule_search(
+    portfolio_rows = _print_portfolios(predictions, args.stake)
+    rule_rows = _print_rule_search(
         predictions,
         stake=args.stake,
         min_buy_rate=args.min_buy_rate,
@@ -272,6 +298,8 @@ def main() -> None:
         min_fold_selections=args.min_fold_selections,
         top_n=args.top_n,
     )
+    _write_csv(portfolio_rows, args.portfolio_output)
+    _write_csv(rule_rows, args.rule_output)
 
 
 if __name__ == "__main__":

@@ -217,6 +217,17 @@ python scripts\build_place_top3_dataset.py --kind eval-odds --engine fastparquet
 python scripts\run_pedigree_place_top3_experiment.py --engine fastparquet
 ```
 
+実験結果のサマリーCSVはデフォルトで次の場所に出力されます。
+
+- `D:\horse_racing_ai\data\model\pedigree_place_top3_portfolios.csv`
+- `D:\horse_racing_ai\data\model\pedigree_place_top3_rules.csv`
+
+出力先を変える場合:
+
+```powershell
+python scripts\run_pedigree_place_top3_experiment.py --engine fastparquet --portfolio-output "D:\horse_racing_ai\data\model\portfolios.csv" --rule-output "D:\horse_racing_ai\data\model\rules.csv"
+```
+
 この実験は、学習データセット内の血統行カバー率がデフォルトで20%未満の場合は停止します。低カバー率でも動作確認だけ行う場合:
 
 ```powershell
