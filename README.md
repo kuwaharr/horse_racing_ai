@@ -55,6 +55,7 @@ DBはSQLiteです。スキーマは`schema.sql`に定義されています。
 - `place_odds`: 複勝オッズ
 - `wide_odds`: ワイドオッズ
 - `trio_odds`: 3連複オッズ
+- `horse`: 馬単位の基本情報と血統取得状態
 
 主な正規化内容:
 
@@ -125,6 +126,30 @@ python scripts\check_db_quality.py
 
 ```powershell
 python scripts\check_db_quality.py --db "D:\horse_racing_ai\data\hr.db"
+```
+
+既存の`runner`テーブルから`horse`テーブルへ馬IDを投入する場合:
+
+```powershell
+python scripts\backfill_horses_from_runners.py
+```
+
+未取得の血統情報を取得する場合:
+
+```powershell
+python scripts\fetch_pending_horse_pedigrees.py --limit 100 --sleep 1.5
+```
+
+血統取得は`https://db.netkeiba.com/horse/ped/<horse_id>/`から取得します。`--limit`は1回の実行で取得する最大頭数、`--sleep`は1頭ごとの待機秒数です。失敗済みの馬も再試行する場合:
+
+```powershell
+python scripts\fetch_pending_horse_pedigrees.py --limit 100 --sleep 1.5 --include-failed
+```
+
+特定の1頭だけ取得し直す場合:
+
+```powershell
+python scripts\fetch_pending_horse_pedigrees.py --horse-id 2014104716 --sleep 0
 ```
 
 複勝3着内予測用の学習データセットをParquetで作成する場合:
