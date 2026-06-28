@@ -148,6 +148,12 @@ python scripts\fetch_pending_horse_pedigrees.py --limit 100 --sleep 1.5
 
 血統取得は`https://db.netkeiba.com/horse/ped/<horse_id>/`から取得します。`--limit`は1回の実行で取得する最大頭数、`--sleep`は1頭ごとの待機秒数です。失敗済みの馬も再試行する場合:
 
+`pending`が0になるまで取得し続ける場合:
+
+```powershell
+python scripts\fetch_pending_horse_pedigrees.py --until-empty --sleep 1.5
+```
+
 モデル用データの血統カバー率を早く上げたい場合は、出走回数が多い馬から優先して取得します:
 
 ```powershell
