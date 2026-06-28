@@ -22,6 +22,7 @@ def main() -> None:
     arg_parser.add_argument("--output", type=Path, default=None)
     arg_parser.add_argument("--engine", choices=["auto", "pyarrow", "fastparquet"], default="auto")
     arg_parser.add_argument("--no-history-features", action="store_true")
+    arg_parser.add_argument("--no-pedigree-features", action="store_true")
     args = arg_parser.parse_args()
 
     if args.kind == "training":
@@ -31,6 +32,7 @@ def main() -> None:
             output,
             engine=args.engine,
             history_features=not args.no_history_features,
+            pedigree_features=not args.no_pedigree_features,
         )
     else:
         output = args.output or FEAT_DIR / default_eval_odds_dataset_name()

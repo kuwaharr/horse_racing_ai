@@ -9,6 +9,14 @@ DEFAULT_TRAINING_DATASET_NAME = "place_top3_dataset.parquet"
 DEFAULT_EVAL_ODDS_DATASET_NAME = "place_top3_eval_odds.parquet"
 
 
+PEDIGREE_FEATURE_COLUMNS = [
+    "sire_id",
+    "dam_id",
+    "broodmare_sire_id",
+    "pedigree_available",
+]
+
+
 EVAL_ODDS_COLUMNS = [
     "race_id",
     "date",
@@ -27,10 +35,6 @@ EVAL_ODDS_COLUMNS = [
     "horse_number",
     "horse_id",
     "horse_name",
-    "sire_id",
-    "dam_id",
-    "broodmare_sire_id",
-    "pedigree_available",
     "sex_id",
     "age",
     "jockey_id",
@@ -64,10 +68,6 @@ TRAINING_FEATURE_COLUMNS = [
     "horse_number",
     "horse_id",
     "horse_name",
-    "sire_id",
-    "dam_id",
-    "broodmare_sire_id",
-    "pedigree_available",
     "sex_id",
     "age",
     "jockey_id",
@@ -757,6 +757,7 @@ def build_place_top3_dataset(
     output_path: Path,
     engine: str = "auto",
     history_features: bool = True,
+    pedigree_features: bool = True,
 ) -> int:
     try:
         import pandas as pd
@@ -775,6 +776,13 @@ def build_place_top3_dataset(
         df = _append_history_features(df)
 
     columns = TRAINING_FEATURE_COLUMNS
+    if pedigree_features:
+        horse_name_index = columns.index("horse_name")
+        columns = (
+            columns[: horse_name_index + 1]
+            + PEDIGREE_FEATURE_COLUMNS
+            + columns[horse_name_index + 1 :]
+        )
     if history_features:
         columns = columns[:-1] + HISTORY_FEATURE_COLUMNS + columns[-1:]
     df = df[columns]
