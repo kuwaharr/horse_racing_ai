@@ -55,9 +55,11 @@ ABLATION_GROUPS = {
         "horse_prev_distance",
     ],
     "pedigree": [
-        "sire_id",
-        "dam_id",
-        "broodmare_sire_id",
+        "sire_",
+        "dam_",
+        "broodmare_sire_",
+        "race_sire_",
+        "race_broodmare_sire_",
         "pedigree_available",
     ],
 }

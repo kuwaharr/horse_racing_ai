@@ -25,9 +25,11 @@ from src.models.place_top3_catboost import build_catboost_walk_forward_predictio
 
 
 PEDIGREE_DROP_PATTERNS = [
-    "sire_id",
-    "dam_id",
-    "broodmare_sire_id",
+    "sire_",
+    "dam_",
+    "broodmare_sire_",
+    "race_sire_",
+    "race_broodmare_sire_",
     "pedigree_available",
 ]
 

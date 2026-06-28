@@ -17,6 +17,48 @@ PEDIGREE_FEATURE_COLUMNS = [
 ]
 
 
+PEDIGREE_HISTORY_FEATURE_COLUMNS = [
+    "sire_past_starts",
+    "sire_past_top3",
+    "sire_past_top3_rate",
+    "sire_past_avg_finish",
+    "sire_track_past_starts",
+    "sire_track_past_top3",
+    "sire_track_past_top3_rate",
+    "sire_surface_past_starts",
+    "sire_surface_past_top3",
+    "sire_surface_past_top3_rate",
+    "sire_distance_band_past_starts",
+    "sire_distance_band_past_top3",
+    "sire_distance_band_past_top3_rate",
+    "dam_past_starts",
+    "dam_past_top3",
+    "dam_past_top3_rate",
+    "dam_past_avg_finish",
+    "broodmare_sire_past_starts",
+    "broodmare_sire_past_top3",
+    "broodmare_sire_past_top3_rate",
+    "broodmare_sire_past_avg_finish",
+    "broodmare_sire_track_past_starts",
+    "broodmare_sire_track_past_top3",
+    "broodmare_sire_track_past_top3_rate",
+    "broodmare_sire_surface_past_starts",
+    "broodmare_sire_surface_past_top3",
+    "broodmare_sire_surface_past_top3_rate",
+    "broodmare_sire_distance_band_past_starts",
+    "broodmare_sire_distance_band_past_top3",
+    "broodmare_sire_distance_band_past_top3_rate",
+    "race_sire_past_top3_rate_rank",
+    "race_sire_past_top3_rate_diff",
+    "race_sire_past_avg_finish_rank",
+    "race_sire_past_avg_finish_diff",
+    "race_broodmare_sire_past_top3_rate_rank",
+    "race_broodmare_sire_past_top3_rate_diff",
+    "race_broodmare_sire_past_avg_finish_rank",
+    "race_broodmare_sire_past_avg_finish_diff",
+]
+
+
 EVAL_ODDS_COLUMNS = [
     "race_id",
     "date",
@@ -374,9 +416,19 @@ def _append_history_features(df):
         ("jockey", "jockey_id"),
         ("trainer", "trainer_id"),
     ]
+    pedigree_entity_specs = [
+        ("sire", "sire_id"),
+        ("dam", "dam_id"),
+        ("broodmare_sire", "broodmare_sire_id"),
+    ]
+    pedigree_entity_specs = [
+        (name, id_col)
+        for name, id_col in pedigree_entity_specs
+        if id_col in df.columns
+    ]
     stats = {
         name: defaultdict(_empty_entity_stat)
-        for name, _ in entity_specs
+        for name, _ in entity_specs + pedigree_entity_specs
     }
     horse_track_stats = defaultdict(_empty_history_stat)
     horse_surface_stats = defaultdict(_empty_history_stat)
@@ -390,9 +442,15 @@ def _append_history_features(df):
     horse_jockey_stats = defaultdict(_empty_history_stat)
     jockey_trainer_stats = defaultdict(_empty_history_stat)
     horse_trainer_stats = defaultdict(_empty_history_stat)
+    sire_track_stats = defaultdict(_empty_history_stat)
+    sire_surface_stats = defaultdict(_empty_history_stat)
+    sire_distance_band_stats = defaultdict(_empty_history_stat)
+    broodmare_sire_track_stats = defaultdict(_empty_history_stat)
+    broodmare_sire_surface_stats = defaultdict(_empty_history_stat)
+    broodmare_sire_distance_band_stats = defaultdict(_empty_history_stat)
     recent_history = {
         name: defaultdict(list)
-        for name, _ in entity_specs
+        for name, _ in entity_specs + pedigree_entity_specs
     }
     horse_last_seen = {}
 
@@ -477,6 +535,21 @@ def _append_history_features(df):
                 elif name == "trainer":
                     history_row["trainer_recent20_top3_rate"] = _recent_top3_rate(recent, 20)
                     history_row["trainer_recent20_avg_finish"] = _recent_avg_finish(recent, 20)
+            for name, id_col in pedigree_entity_specs:
+                value = row[id_col]
+                if _missing_key(value):
+                    starts = 0
+                    top3 = 0
+                    finish_sum = 0.0
+                else:
+                    item = stats[name][value]
+                    starts = item["starts"]
+                    top3 = item["top3"]
+                    finish_sum = item["finish_sum"]
+                history_row[f"{name}_past_starts"] = starts
+                history_row[f"{name}_past_top3"] = top3
+                history_row[f"{name}_past_top3_rate"] = None if starts == 0 else top3 / starts
+                history_row[f"{name}_past_avg_finish"] = None if starts == 0 else finish_sum / starts
             for feature_name, item in [
                 ("horse_track", horse_track_stats[(row["horse_id"], row["track_id"])]),
                 ("horse_surface", horse_surface_stats[(row["horse_id"], row["surface_id"])]),
@@ -510,6 +583,38 @@ def _append_history_features(df):
                     history_row[f"{feature_name}_past_top3_rate_lift"] = (
                         None if top3_rate is None or owner_top3_rate is None else top3_rate - owner_top3_rate
                     )
+            for feature_name, id_col, stat_map, key_value in [
+                ("sire_track", "sire_id", sire_track_stats, row["track_id"]),
+                ("sire_surface", "sire_id", sire_surface_stats, row["surface_id"]),
+                ("sire_distance_band", "sire_id", sire_distance_band_stats, row["distance_band"]),
+                (
+                    "broodmare_sire_track",
+                    "broodmare_sire_id",
+                    broodmare_sire_track_stats,
+                    row["track_id"],
+                ),
+                (
+                    "broodmare_sire_surface",
+                    "broodmare_sire_id",
+                    broodmare_sire_surface_stats,
+                    row["surface_id"],
+                ),
+                (
+                    "broodmare_sire_distance_band",
+                    "broodmare_sire_id",
+                    broodmare_sire_distance_band_stats,
+                    row["distance_band"],
+                ),
+            ]:
+                if id_col not in df.columns or _missing_key(row[id_col]):
+                    item = _empty_history_stat()
+                else:
+                    item = stat_map[(row[id_col], key_value)]
+                starts = item["starts"]
+                top3 = item["top3"]
+                history_row[f"{feature_name}_past_starts"] = starts
+                history_row[f"{feature_name}_past_top3"] = top3
+                history_row[f"{feature_name}_past_top3_rate"] = None if starts == 0 else top3 / starts
             history_rows.append(history_row)
 
         for _, row in day_df.iterrows():
@@ -565,6 +670,15 @@ def _append_history_features(df):
                         }
                     )
                 recent_history[name][row[id_col]].append(recent_item)
+            for name, id_col in pedigree_entity_specs:
+                value = row[id_col]
+                if _missing_key(value):
+                    continue
+                item = stats[name][value]
+                item["starts"] += 1
+                item["top3"] += target
+                item["finish_sum"] += finish
+                recent_history[name][value].append({"top3": target, "finish": finish})
             horse_last_seen[row["horse_id"]] = (row["date_obj"], int(row["distance"]))
             for item in [
                 horse_track_stats[(row["horse_id"], row["track_id"])],
@@ -582,6 +696,22 @@ def _append_history_features(df):
             ]:
                 item["starts"] += 1
                 item["top3"] += target
+            if "sire_id" in df.columns and not _missing_key(row["sire_id"]):
+                for item in [
+                    sire_track_stats[(row["sire_id"], row["track_id"])],
+                    sire_surface_stats[(row["sire_id"], row["surface_id"])],
+                    sire_distance_band_stats[(row["sire_id"], row["distance_band"])],
+                ]:
+                    item["starts"] += 1
+                    item["top3"] += target
+            if "broodmare_sire_id" in df.columns and not _missing_key(row["broodmare_sire_id"]):
+                for item in [
+                    broodmare_sire_track_stats[(row["broodmare_sire_id"], row["track_id"])],
+                    broodmare_sire_surface_stats[(row["broodmare_sire_id"], row["surface_id"])],
+                    broodmare_sire_distance_band_stats[(row["broodmare_sire_id"], row["distance_band"])],
+                ]:
+                    item["starts"] += 1
+                    item["top3"] += target
 
     try:
         import pandas as pd
@@ -663,6 +793,14 @@ def _valid_float(value) -> float | None:
     return value
 
 
+def _missing_key(value) -> bool:
+    if value is None:
+        return True
+    if isinstance(value, float) and isnan(value):
+        return True
+    return value == ""
+
+
 def _distance_band(distance: int) -> str:
     if distance < 1400:
         return "under1400"
@@ -737,6 +875,10 @@ def _append_race_relative_features(df):
         ("horse_jockey_past_top3_rate", False),
         ("jockey_trainer_past_top3_rate", False),
         ("horse_trainer_past_top3_rate", False),
+        ("sire_past_top3_rate", False),
+        ("sire_past_avg_finish", True),
+        ("broodmare_sire_past_top3_rate", False),
+        ("broodmare_sire_past_avg_finish", True),
         ("gate", True),
         ("horse_number", True),
         ("weight", False),
@@ -784,7 +926,10 @@ def build_place_top3_dataset(
             + columns[horse_name_index + 1 :]
         )
     if history_features:
-        columns = columns[:-1] + HISTORY_FEATURE_COLUMNS + columns[-1:]
+        history_columns = HISTORY_FEATURE_COLUMNS
+        if pedigree_features:
+            history_columns = history_columns + PEDIGREE_HISTORY_FEATURE_COLUMNS
+        columns = columns[:-1] + history_columns + columns[-1:]
     df = df[columns]
 
     try:
