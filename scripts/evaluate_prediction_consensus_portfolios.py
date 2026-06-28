@@ -43,6 +43,11 @@ PORTFOLIOS = [
         "description": "more bets, lower return",
         "rules": ["union_value_odds", "consensus_high_return", "consensus_volume"],
     },
+    {
+        "name": "wide_value",
+        "description": "near 10 percent race coverage, lower return",
+        "rules": ["union_wide_value"],
+    },
 ]
 
 
