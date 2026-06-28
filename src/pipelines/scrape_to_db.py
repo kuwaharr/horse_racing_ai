@@ -171,6 +171,99 @@ def write_raw_race_to_db(race_id: str, raw_data: dict) -> bool:
         return True
 
 
+def default_odds_kinds():
+    return [
+        ("win", 1, parse_win),
+        ("place", 2, parse_place),
+        ("wide", 5, parse_wide),
+        ("trio", 7, parse_trio),
+    ]
+
+
+def scrape_race(race_id: str, race_page_retries: int = 3) -> bool:
+    race_url = make_race_url(race_id)
+
+    race = None
+    runners = None
+    for attempt in range(1, race_page_retries + 1):
+        r_soup = make_soup(race_url)
+        sleep_between_requests()
+        if not r_soup.success:
+            logger.error("race_id=%s make_soup failed attempt=%s/%s %s", race_id, attempt, race_page_retries, r_soup.error)
+            sleep_backoff()
+            continue
+        soup = r_soup.value
+
+        r_race_info = parse_url(race_url)
+        if not r_race_info.success:
+            logger.error("race_id=%s parse_url failed %s", race_id, r_race_info.error)
+            return False
+        race_info = r_race_info.value
+
+        r_race_meta = extract_race_meta(soup)
+        if not r_race_meta.success:
+            logger.error(
+                "race_id=%s extract_race_meta failed attempt=%s/%s %s",
+                race_id,
+                attempt,
+                race_page_retries,
+                r_race_meta.error,
+            )
+            continue
+        race_meta = r_race_meta.value
+
+        r_runners = extract_runners(soup)
+        if not r_runners.success:
+            logger.error(
+                "race_id=%s extract_runners failed attempt=%s/%s %s",
+                race_id,
+                attempt,
+                race_page_retries,
+                r_runners.error,
+            )
+            continue
+
+        race = combine_race_dict(race_info, race_meta)
+        runners = r_runners.value
+        break
+
+    if race is None or runners is None:
+        logger.error("race_id=%s race page retries exhausted; skipping", race_id)
+        return False
+
+    odds = {}
+    for name, odds_type, parser in default_odds_kinds():
+        odds[name] = None
+        r_jsonp = fetch_odds_jsonp(race_id, odds_type, compress=0)
+        sleep_between_requests()
+        if not r_jsonp.success:
+            logger.warning("race_id=%s kind=%s fetch_odds_jsonp failed %s", race_id, name, r_jsonp.error)
+            sleep_backoff()
+            continue
+        jsonp = r_jsonp.value
+
+        r_odds_block = parse_jsonp(jsonp, odds_type)
+        if not r_odds_block.success:
+            logger.warning("race_id=%s kind=%s parse_jsonp failed %s", race_id, name, r_odds_block.error)
+            sleep_backoff()
+            continue
+        odds_block = r_odds_block.value
+
+        odds[name] = parser(odds_block)
+
+    export_json(race, runners, odds)
+    logger.info("race_id=%s Scraping/Exporting done", race_id)
+
+    raw_data_file = RAW_DIR / f"{race_id}.json"
+    raw_data = load_json(raw_data_file)
+
+    if not write_raw_race_to_db(race_id, raw_data):
+        return False
+
+    logger.info("race_id=%s Normalizing/Upserting done", race_id)
+    return True
+
+
 def run(
     race_list_url: str,
     mode: str = "manual",
@@ -180,13 +273,6 @@ def run(
     parsed = urlparse(race_list_url)
     qs = parse_qs(parsed.query)
     current_page = int(qs.get("page", ["1"])[0])
-
-    odds_kinds = [
-        ("win", 1, parse_win),
-        ("place", 2, parse_place),
-        ("wide", 5, parse_wide),
-        ("trio", 7, parse_trio),
-    ]
 
     n_race_ids_in_db = check_race_ids_in_db()
     if limit is not None:
@@ -222,69 +308,7 @@ def run(
 
         for i, race_id in enumerate(race_ids, start=1):
             logger.info("%s/%s race_id=%s Processing", i, n_race_ids, race_id)
-
-            race_url = make_race_url(race_id)
-
-            r_soup = make_soup(race_url)
-            sleep_between_requests()
-            if not r_soup.success:
-                logger.error("make_soup failed %s", r_soup.error)
-                sleep_backoff()
-                continue
-            soup = r_soup.value
-
-            r_race_info = parse_url(race_url)
-            if not r_race_info.success:
-                logger.error("parse_url failed %s", r_race_info.error)
-                continue
-            race_info = r_race_info.value
-
-            r_race_meta = extract_race_meta(soup)
-            if not r_race_meta.success:
-                logger.error("extract_race_meta failed %s", r_race_meta.error)
-                continue
-            race_meta = r_race_meta.value
-
-            race = combine_race_dict(race_info, race_meta)
-
-            r_runners = extract_runners(soup)
-            if not r_runners.success:
-                logger.error("extract_runners failed %s", r_runners.error)
-                continue
-            runners = r_runners.value
-
-            odds = {}
-            for name, odds_type, parser in odds_kinds:
-                odds[name] = None
-                r_jsonp = fetch_odds_jsonp(race_id, odds_type, compress=0)
-                sleep_between_requests()
-                if not r_jsonp.success:
-                    logger.warning("kind=%s fetch_odds_jsonp failed %s", name, r_jsonp.error)
-                    sleep_backoff()
-                    continue
-                jsonp = r_jsonp.value
-
-                r_odds_block = parse_jsonp(jsonp, odds_type)
-                if not r_odds_block.success:
-                    logger.warning("kind=%s parse_jsonp failed %s", name, r_odds_block.error)
-                    sleep_backoff()
-                    continue
-                odds_block = r_odds_block.value
-
-                odds[name] = parser(odds_block)
-
-            export_json(race, runners, odds)
-
-            logger.info("Scraping/Exporting done")
-
-            raw_data_file = RAW_DIR / f"{race_id}.json"
-
-            raw_data = load_json(raw_data_file)
-
-            if not write_raw_race_to_db(race_id, raw_data):
-                continue
-
-            logger.info("Normalizing/Upserting done")
+            scrape_race(race_id)
 
         logger.info("page=%s Done", current_page)
 
@@ -306,11 +330,19 @@ def run(
 
 def main(argv: list[str] | None = None) -> None:
     arg_parser = argparse.ArgumentParser()
-    arg_parser.add_argument("--url", required=True)
+    arg_parser.add_argument("--url", default=None)
+    arg_parser.add_argument("--race-id", default=None)
     arg_parser.add_argument("--mode", choices=["auto", "manual"], default="manual")
     arg_parser.add_argument("--limit", type=int, default=None)
     arg_parser.add_argument("--auto-stop-command", default="stop")
     args = arg_parser.parse_args(argv)
+
+    if args.race_id is not None:
+        if not scrape_race(args.race_id):
+            raise SystemExit(1)
+        return
+    if args.url is None:
+        arg_parser.error("--url is required unless --race-id is specified")
 
     run(args.url, mode=args.mode, limit=args.limit, auto_stop_command=args.auto_stop_command)
 

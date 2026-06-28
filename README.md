@@ -110,6 +110,12 @@ $env:HORSE_RACING_DATA_ROOT = "D:\horse_racing_ai\data"
 python scripts\scrape_to_db.py --url "<netkeibaのレース一覧URL>"
 ```
 
+特定の1レースだけ取得する場合:
+
+```powershell
+python scripts\scrape_to_db.py --race-id 202403030106
+```
+
 自動で次ページへ進める場合:
 
 ```powershell
