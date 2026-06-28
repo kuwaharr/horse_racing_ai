@@ -84,6 +84,11 @@ PORTFOLIOS = [
         "rules": ["union_mid_20_stable", "union_value_odds"],
     },
     {
+        "name": "mid_25_value_plus_avg",
+        "description": "near 25 percent coverage with average-score add-on",
+        "rules": ["union_mid_25_value", "avg_balanced"],
+    },
+    {
         "name": "broad_37_value",
         "description": "higher race coverage, lower return",
         "rules": ["union_broad_37_value"],
