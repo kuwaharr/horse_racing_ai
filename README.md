@@ -116,6 +116,12 @@ python scripts\scrape_to_db.py --url "<netkeibaのレース一覧URL>"
 python scripts\scrape_to_db.py --url "<netkeibaのレース一覧URL>" --mode auto
 ```
 
+autoモード中に現在ページの処理が終わったところで停止したい場合は、同じターミナルで`stop`と入力してEnterを押します。別の停止文字列を使う場合:
+
+```powershell
+python scripts\scrape_to_db.py --url "<netkeibaのレース一覧URL>" --mode auto --auto-stop-command quit
+```
+
 DB内のレース数が指定値以上になったら開始せず終了する場合:
 
 ```powershell

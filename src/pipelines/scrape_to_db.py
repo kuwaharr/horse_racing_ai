@@ -1,5 +1,8 @@
 import argparse
+import queue
 import random
+import sys
+import threading
 import time
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
@@ -69,6 +72,41 @@ def sleep_backoff(min_sec: float = 30.0, max_sec: float = 60.0) -> None:
     time.sleep(random.uniform(min_sec, max_sec))
 
 
+def start_auto_command_listener() -> queue.Queue[str]:
+    commands: queue.Queue[str] = queue.Queue()
+
+    def listen() -> None:
+        while True:
+            line = sys.stdin.readline()
+            if line == "":
+                return
+            command = line.strip()
+            if command:
+                logger.info("Auto command received: %s", command)
+            commands.put(command)
+
+    thread = threading.Thread(target=listen, daemon=True)
+    thread.start()
+    return commands
+
+
+def should_stop_after_page(commands: queue.Queue[str], stop_command: str) -> bool:
+    should_stop = False
+    while True:
+        try:
+            command = commands.get_nowait()
+        except queue.Empty:
+            break
+        if not command:
+            continue
+        if command == stop_command:
+            should_stop = True
+            logger.info("Stop command received; stopping after current page")
+        else:
+            logger.warning("Unrecognized command ignored: %s", command)
+    return should_stop
+
+
 def write_raw_race_to_db(race_id: str, raw_data: dict) -> bool:
     with connect(DB_PATH) as conn:
         cur = conn.cursor()
@@ -133,7 +171,12 @@ def write_raw_race_to_db(race_id: str, raw_data: dict) -> bool:
         return True
 
 
-def run(race_list_url: str, mode: str = "manual", limit: int | None = None) -> None:
+def run(
+    race_list_url: str,
+    mode: str = "manual",
+    limit: int | None = None,
+    auto_stop_command: str = "stop",
+) -> None:
     parsed = urlparse(race_list_url)
     qs = parse_qs(parsed.query)
     current_page = int(qs.get("page", ["1"])[0])
@@ -150,6 +193,14 @@ def run(race_list_url: str, mode: str = "manual", limit: int | None = None) -> N
         if n_race_ids_in_db >= limit:
             logger.info("Found more race_ids in DB than limit")
             return
+
+    auto_commands = None
+    if mode == "auto":
+        auto_commands = start_auto_command_listener()
+        logger.info(
+            "Auto mode command listener started. Type '%s' and Enter to stop after the current page.",
+            auto_stop_command,
+        )
 
     while True:
         r_soup = make_soup(race_list_url)
@@ -240,6 +291,8 @@ def run(race_list_url: str, mode: str = "manual", limit: int | None = None) -> N
         check_race_ids_in_db()
 
         if mode == "auto":
+            if auto_commands is not None and should_stop_after_page(auto_commands, auto_stop_command):
+                break
             current_page += 1
             race_list_url = increment_page(race_list_url)
         else:
@@ -256,9 +309,10 @@ def main(argv: list[str] | None = None) -> None:
     arg_parser.add_argument("--url", required=True)
     arg_parser.add_argument("--mode", choices=["auto", "manual"], default="manual")
     arg_parser.add_argument("--limit", type=int, default=None)
+    arg_parser.add_argument("--auto-stop-command", default="stop")
     args = arg_parser.parse_args(argv)
 
-    run(args.url, mode=args.mode, limit=args.limit)
+    run(args.url, mode=args.mode, limit=args.limit, auto_stop_command=args.auto_stop_command)
 
 
 if __name__ == "__main__":
