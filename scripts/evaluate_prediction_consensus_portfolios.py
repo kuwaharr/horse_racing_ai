@@ -59,6 +59,11 @@ PORTFOLIOS = [
         "rules": ["union_broad_30_value"],
     },
     {
+        "name": "mid_20_value",
+        "description": "near 20 percent race coverage, medium return",
+        "rules": ["union_mid_20_value"],
+    },
+    {
         "name": "broad_37_value",
         "description": "higher race coverage, lower return",
         "rules": ["union_broad_37_value"],
@@ -152,6 +157,7 @@ def main() -> None:
         args.secondary_predictions,
         args.engine,
     )
+    total_races = int(predictions["race_id"].nunique())
     rules_by_name = {rule["name"]: rule for rule in CONSENSUS_RULES}
     rows = [
         _summarize_portfolio(predictions, rules_by_name, portfolio, args.stake)
@@ -161,15 +167,17 @@ def main() -> None:
     print(f"Base predictions: {args.base_predictions}")
     print(f"Secondary predictions: {args.secondary_predictions}")
     print(f"Rows: {len(predictions):,}")
-    print(f"Races: {int(predictions['race_id'].nunique()):,}")
+    print(f"Races: {total_races:,}")
     print("")
     print(
-        "portfolio              races  selections  hits  hit_rate  return_mid  "
+        "portfolio              races  buy_rate  selections  hits  hit_rate  return_mid  "
         "min_mid  max_mid  min_fold_n  rules"
     )
     for row in rows:
+        buy_rate_pct = None if total_races == 0 else row["races"] / total_races * 100
         print(
-            f"{row['name']:<22} {row['races']:>5,}  {row['selections']:>10,}  "
+            f"{row['name']:<22} {row['races']:>5,}  {_format_pct(buy_rate_pct):>8}  "
+            f"{row['selections']:>10,}  "
             f"{row['hits']:>4,}  {_format_pct(row['hit_rate_pct']):>8}  "
             f"{_format_pct(row['return_mid_pct']):>10}  "
             f"{_format_pct(row['min_fold_return_mid_pct']):>7}  "

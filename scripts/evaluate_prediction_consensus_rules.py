@@ -77,6 +77,21 @@ CONSENSUS_RULES = [
         "surface_id": None,
     },
     {
+        "name": "union_mid_20_value",
+        "description": "near 20 percent race coverage, selected tracks",
+        "mode": "union",
+        "base_pred_min": 0.35,
+        "secondary_pred_min": 0.35,
+        "avg_pred_min": None,
+        "odds_min": 3.0,
+        "odds_max": 5.0,
+        "distance_min": 1400,
+        "distance_max": 2200,
+        "include_track_ids": [4, 5, 6, 8, 9],
+        "exclude_track_ids": None,
+        "surface_id": None,
+    },
+    {
         "name": "union_broad_37_value",
         "description": "higher race coverage, all tracks",
         "mode": "union",
@@ -248,20 +263,23 @@ def main() -> None:
         args.secondary_predictions,
         args.engine,
     )
+    total_races = int(predictions["race_id"].nunique())
     rows = [_summarize_rule(predictions, rule, args.stake) for rule in CONSENSUS_RULES]
 
     print(f"Base predictions: {args.base_predictions}")
     print(f"Secondary predictions: {args.secondary_predictions}")
     print(f"Rows: {len(predictions):,}")
-    print(f"Races: {int(predictions['race_id'].nunique()):,}")
+    print(f"Races: {total_races:,}")
     print("")
     print(
-        "rule                   races  selections  hits  hit_rate  return_mid  "
+        "rule                   races  buy_rate  selections  hits  hit_rate  return_mid  "
         "min_mid  max_mid  min_fold_n  description"
     )
     for row in rows:
+        buy_rate_pct = None if total_races == 0 else row["races"] / total_races * 100
         print(
-            f"{row['name']:<22} {row['races']:>5,}  {row['selections']:>10,}  "
+            f"{row['name']:<22} {row['races']:>5,}  {_format_pct(buy_rate_pct):>8}  "
+            f"{row['selections']:>10,}  "
             f"{row['hits']:>4,}  {_format_pct(row['hit_rate_pct']):>8}  "
             f"{_format_pct(row['return_mid_pct']):>10}  "
             f"{_format_pct(row['min_fold_return_mid_pct']):>7}  "
