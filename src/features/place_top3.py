@@ -27,6 +27,10 @@ EVAL_ODDS_COLUMNS = [
     "horse_number",
     "horse_id",
     "horse_name",
+    "sire_id",
+    "dam_id",
+    "broodmare_sire_id",
+    "pedigree_available",
     "sex_id",
     "age",
     "jockey_id",
@@ -60,6 +64,10 @@ TRAINING_FEATURE_COLUMNS = [
     "horse_number",
     "horse_id",
     "horse_name",
+    "sire_id",
+    "dam_id",
+    "broodmare_sire_id",
+    "pedigree_available",
     "sex_id",
     "age",
     "jockey_id",
@@ -317,6 +325,10 @@ SELECT
     ru.horse_number,
     ru.horse_id,
     ru.horse_name,
+    ho.sire_id,
+    ho.dam_id,
+    ho.broodmare_sire_id,
+    CASE WHEN ho.pedigree_fetch_status = 'fetched' THEN 1 ELSE 0 END AS pedigree_available,
     ru.sex_id,
     ru.age,
     ru.jockey_id,
@@ -340,6 +352,8 @@ INNER JOIN race ra
 LEFT JOIN place_odds po
     ON po.race_id = ru.race_id
     AND po.horse_number = ru.horse_number
+LEFT JOIN horse ho
+    ON ho.horse_id = ru.horse_id
 WHERE ru.status_id = 0
   AND ru.finish IS NOT NULL
 ORDER BY ra.date, ra.race_id, ru.horse_number

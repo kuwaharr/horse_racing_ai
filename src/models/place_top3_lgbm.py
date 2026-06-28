@@ -2,7 +2,14 @@ from pathlib import Path
 from typing import Any
 
 
-ID_COLUMNS = ["horse_id", "jockey_id", "trainer_id"]
+ID_COLUMNS = [
+    "horse_id",
+    "jockey_id",
+    "trainer_id",
+    "sire_id",
+    "dam_id",
+    "broodmare_sire_id",
+]
 EXCLUDE_FEATURE_COLUMNS = {"race_id", "date", "horse_name", "target_top3"}
 
 
