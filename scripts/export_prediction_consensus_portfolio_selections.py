@@ -138,8 +138,13 @@ def main() -> None:
         "surface_id",
         "distance",
         "race_size",
+        "pedigree_available",
+        "sire_id",
+        "dam_id",
+        "broodmare_sire_id",
     ]
     args.output.parent.mkdir(parents=True, exist_ok=True)
+    output_columns = [col for col in output_columns if col in selections.columns]
     selections[output_columns].to_csv(args.output, index=False, encoding="utf-8-sig")
 
     print(f"Base predictions: {args.base_predictions}")

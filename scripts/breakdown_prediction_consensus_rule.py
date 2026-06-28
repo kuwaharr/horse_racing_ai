@@ -78,7 +78,11 @@ def main() -> None:
         f"return_mid={_format_pct(overall['return_mid_pct'])}"
     )
 
-    for group_col in ["fold", "year_month", "track_id", "surface_id"]:
+    group_cols = ["fold", "year_month", "track_id", "surface_id"]
+    if "pedigree_available" in selected.columns:
+        group_cols.append("pedigree_available")
+
+    for group_col in group_cols:
         _print_breakdown(selected, group_col, args.stake)
 
 

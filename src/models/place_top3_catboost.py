@@ -105,18 +105,21 @@ def _fit_and_evaluate_catboost_split(
     model.fit(train_x, train_y, cat_features=cat_feature_indices)
     pred = model.predict_proba(test_x)[:, 1]
 
-    eval_df = test_df[
-        [
-            "race_id",
-            "date",
-            "horse_number",
-            "target_top3",
-            "track_id",
-            "surface_id",
-            "distance",
-            "race_size",
-        ]
-    ].copy()
+    eval_columns = [
+        "race_id",
+        "date",
+        "horse_number",
+        "target_top3",
+        "track_id",
+        "surface_id",
+        "distance",
+        "race_size",
+        "pedigree_available",
+        "sire_id",
+        "dam_id",
+        "broodmare_sire_id",
+    ]
+    eval_df = test_df[[col for col in eval_columns if col in test_df.columns]].copy()
     eval_df["pred_top3"] = pred
 
     odds_cols = ["race_id", "horse_number", "place_odds_min", "place_odds_max"]
