@@ -97,18 +97,6 @@ $env:HORSE_RACING_DATA_ROOT = "D:\horse_racing_ai\data"
 
 ## 使い方
 
-CodexやWindows Terminalから実行するプロジェクト内コマンドの出力をログに残したい場合は、`scripts\run_logged.py`で対象コマンドを包みます。画面に表示しながら、同じ内容を`logs\codex_runs\YYYYMMDD_HHMMSS_<name>.log`へ保存します。
-
-```powershell
-python scripts\run_logged.py --name db_quality -- python scripts\check_db_quality.py
-```
-
-仮想環境のPythonを明示する場合:
-
-```powershell
-.\.venv\Scripts\python.exe scripts\run_logged.py --name rule_tiers -- .\.venv\Scripts\python.exe scripts\evaluate_rule_tiers_from_predictions.py --engine fastparquet --predictions "D:\horse_racing_ai\data\model\catboost_place_top3_predictions_affinity_lift_trial.parquet"
-```
-
 レース一覧ページのURLを指定してスクレイピングします。
 
 ```powershell
