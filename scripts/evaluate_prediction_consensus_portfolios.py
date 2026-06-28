@@ -53,6 +53,16 @@ PORTFOLIOS = [
         "description": "near 10 percent coverage with high-return consensus add-on",
         "rules": ["union_wide_value", "consensus_high_return"],
     },
+    {
+        "name": "broad_30_value",
+        "description": "near 30 percent race coverage, lower return",
+        "rules": ["union_broad_30_value"],
+    },
+    {
+        "name": "broad_37_value",
+        "description": "higher race coverage, lower return",
+        "rules": ["union_broad_37_value"],
+    },
 ]
 
 
