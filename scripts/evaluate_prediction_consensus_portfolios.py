@@ -64,6 +64,11 @@ PORTFOLIOS = [
         "rules": ["union_mid_20_value"],
     },
     {
+        "name": "mid_20_balanced",
+        "description": "near 20 percent race coverage, balanced return",
+        "rules": ["union_mid_20_balanced"],
+    },
+    {
         "name": "broad_37_value",
         "description": "higher race coverage, lower return",
         "rules": ["union_broad_37_value"],
