@@ -46,3 +46,11 @@ def fetch_odds_jsonp(race_id: str, odds_type: int, compress=0) -> Result[str]:
 def make_race_url(race_id: str) -> str:
     race_url = f"https://race.netkeiba.com/race/result.html?race_id={race_id}&rf=race_submenu"
     return race_url
+
+
+def make_horse_url(horse_id: str) -> str:
+    return f"https://db.netkeiba.com/horse/{horse_id}/"
+
+
+def make_horse_pedigree_url(horse_id: str) -> str:
+    return f"https://db.netkeiba.com/horse/ped/{horse_id}/"

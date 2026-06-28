@@ -49,6 +49,26 @@ CREATE TABLE IF NOT EXISTS runner (
     FOREIGN KEY (race_id) REFERENCES race(race_id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS horse (
+    horse_id TEXT PRIMARY KEY,
+    horse_name TEXT,
+    sire_id TEXT,
+    sire_name TEXT,
+    dam_id TEXT,
+    dam_name TEXT,
+    broodmare_sire_id TEXT,
+    broodmare_sire_name TEXT,
+    pedigree_fetched_at TEXT,
+    pedigree_fetch_status TEXT NOT NULL DEFAULT 'pending',
+    pedigree_fetch_error TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CHECK (pedigree_fetch_status IN ('pending', 'fetched', 'failed', 'not_found'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_horse_pedigree_fetch_status
+    ON horse(pedigree_fetch_status);
+
 CREATE TABLE IF NOT EXISTS place_odds (
     race_id TEXT NOT NULL,
     horse_number INTEGER NOT NULL,

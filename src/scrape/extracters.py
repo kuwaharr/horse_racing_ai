@@ -352,3 +352,74 @@ def extract_race_ids(soup: BeautifulSoup) -> set:
 
     sorted_ids = sorted(ids)
     return sorted_ids
+
+
+def _clean_text(value: str | None) -> str | None:
+    if value is None:
+        return None
+    cleaned = re.sub(r"\s+", " ", value).strip()
+    return cleaned if cleaned else None
+
+
+def _horse_link_id(href: str | None) -> str | None:
+    if href is None:
+        return None
+    if m := re.search(r"/horse/([0-9A-Za-z]+)/?", href):
+        return m.group(1)
+    return None
+
+
+def extract_horse_pedigree(soup: BeautifulSoup, horse_id: str) -> Result[dict]:
+    pedigree = {
+        "horse_id": horse_id,
+        "horse_name": None,
+        "sire_id": None,
+        "sire_name": None,
+        "dam_id": None,
+        "dam_name": None,
+        "broodmare_sire_id": None,
+        "broodmare_sire_name": None,
+        "pedigree_fetch_status": "fetched",
+        "pedigree_fetch_error": None,
+    }
+
+    title = soup.find("title")
+    if title:
+        title_text = _clean_text(title.get_text())
+        if title_text:
+            pedigree["horse_name"] = title_text.split("|")[0].strip()
+
+    blood_table = soup.find("table", class_=re.compile(r"blood", re.IGNORECASE))
+    if blood_table is None:
+        return Result(
+            success=False,
+            error=f"Could not find blood table for horse_id={horse_id}",
+        )
+
+    rows = blood_table.find_all("tr")
+    if len(rows) < 17:
+        return Result(
+            success=False,
+            error=f"Blood table has too few rows for horse_id={horse_id}: {len(rows)}",
+        )
+
+    def linked_horse_from_cell(row_index: int, cell_index: int) -> tuple[str | None, str | None]:
+        cells = rows[row_index].find_all(["td", "th"])
+        if len(cells) <= cell_index:
+            return None, None
+        link = cells[cell_index].find("a", href=True)
+        if link is None:
+            return None, None
+        return _horse_link_id(link.get("href")), _clean_text(link.get_text(" ", strip=True))
+
+    pedigree["sire_id"], pedigree["sire_name"] = linked_horse_from_cell(0, 0)
+    pedigree["dam_id"], pedigree["dam_name"] = linked_horse_from_cell(16, 0)
+    pedigree["broodmare_sire_id"], pedigree["broodmare_sire_name"] = linked_horse_from_cell(16, 1)
+
+    if not pedigree["sire_id"] or not pedigree["dam_id"]:
+        return Result(
+            success=False,
+            error=f"Could not parse sire/dam from blood table for horse_id={horse_id}",
+        )
+
+    return Result(success=True, value=pedigree)

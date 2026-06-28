@@ -2,11 +2,38 @@ import sqlite3
 from pathlib import Path
 
 
+HORSE_SCHEMA_SQL = """
+CREATE TABLE IF NOT EXISTS horse (
+    horse_id TEXT PRIMARY KEY,
+    horse_name TEXT,
+    sire_id TEXT,
+    sire_name TEXT,
+    dam_id TEXT,
+    dam_name TEXT,
+    broodmare_sire_id TEXT,
+    broodmare_sire_name TEXT,
+    pedigree_fetched_at TEXT,
+    pedigree_fetch_status TEXT NOT NULL DEFAULT 'pending',
+    pedigree_fetch_error TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CHECK (pedigree_fetch_status IN ('pending', 'fetched', 'failed', 'not_found'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_horse_pedigree_fetch_status
+    ON horse(pedigree_fetch_status);
+"""
+
+
 def connect(db_path: Path) -> sqlite3.Connection:
     db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(db_path)
     conn.execute("PRAGMA foreign_keys = ON")
     return conn
+
+
+def ensure_horse_table(cur: sqlite3.Cursor) -> None:
+    cur.executescript(HORSE_SCHEMA_SQL)
 
 
 def get_race_ids_in_db(db_path: Path) -> set:
@@ -38,6 +65,131 @@ def upsert_runner(cur: sqlite3.Cursor, runner: dict) -> None:
             {", ".join([f"{c}=excluded.{c}" for c in set_cols])}
     """
     cur.execute(sql, [runner[c] for c in cols])
+
+
+def upsert_horse_pending(cur: sqlite3.Cursor, horse_id: str | None, horse_name: str | None) -> None:
+    if not horse_id:
+        return
+    ensure_horse_table(cur)
+    cur.execute(
+        """
+        INSERT INTO horse (
+            horse_id,
+            horse_name,
+            pedigree_fetch_status,
+            created_at,
+            updated_at
+        )
+        VALUES (?, ?, 'pending', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        ON CONFLICT(horse_id) DO UPDATE SET
+            horse_name = COALESCE(excluded.horse_name, horse.horse_name),
+            updated_at = CURRENT_TIMESTAMP
+        """,
+        [horse_id, horse_name],
+    )
+
+
+def backfill_horses_from_runners(cur: sqlite3.Cursor) -> int:
+    ensure_horse_table(cur)
+    cur.execute(
+        """
+        INSERT INTO horse (
+            horse_id,
+            horse_name,
+            pedigree_fetch_status,
+            created_at,
+            updated_at
+        )
+        SELECT
+            runner.horse_id,
+            MAX(runner.horse_name),
+            'pending',
+            CURRENT_TIMESTAMP,
+            CURRENT_TIMESTAMP
+        FROM runner
+        WHERE runner.horse_id IS NOT NULL
+          AND runner.horse_id != ''
+        GROUP BY runner.horse_id
+        ON CONFLICT(horse_id) DO UPDATE SET
+            horse_name = COALESCE(horse.horse_name, excluded.horse_name),
+            updated_at = CURRENT_TIMESTAMP
+        """
+    )
+    return cur.rowcount
+
+
+def get_horses_for_pedigree_fetch(
+    cur: sqlite3.Cursor,
+    limit: int,
+    include_failed: bool = False,
+) -> list[dict]:
+    ensure_horse_table(cur)
+    statuses = ("pending", "failed") if include_failed else ("pending",)
+    placeholders = ", ".join(["?"] * len(statuses))
+    cur.execute(
+        f"""
+        SELECT horse_id, horse_name, pedigree_fetch_status
+        FROM horse
+        WHERE pedigree_fetch_status IN ({placeholders})
+        ORDER BY updated_at, horse_id
+        LIMIT ?
+        """,
+        [*statuses, limit],
+    )
+    return [
+        {"horse_id": row[0], "horse_name": row[1], "pedigree_fetch_status": row[2]}
+        for row in cur.fetchall()
+    ]
+
+
+def get_horse_for_pedigree_fetch(cur: sqlite3.Cursor, horse_id: str) -> dict | None:
+    ensure_horse_table(cur)
+    cur.execute(
+        """
+        SELECT horse_id, horse_name, pedigree_fetch_status
+        FROM horse
+        WHERE horse_id = ?
+        """,
+        [horse_id],
+    )
+    row = cur.fetchone()
+    if row is None:
+        return None
+    return {"horse_id": row[0], "horse_name": row[1], "pedigree_fetch_status": row[2]}
+
+
+def update_horse_pedigree(cur: sqlite3.Cursor, pedigree: dict) -> None:
+    ensure_horse_table(cur)
+    cur.execute(
+        """
+        UPDATE horse
+        SET
+            horse_name = COALESCE(?, horse_name),
+            sire_id = ?,
+            sire_name = ?,
+            dam_id = ?,
+            dam_name = ?,
+            broodmare_sire_id = ?,
+            broodmare_sire_name = ?,
+            pedigree_fetched_at = CURRENT_TIMESTAMP,
+            pedigree_fetch_status = ?,
+            pedigree_fetch_error = ?,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE horse_id = ?
+        """,
+        [
+            pedigree.get("horse_name"),
+            pedigree.get("sire_id"),
+            pedigree.get("sire_name"),
+            pedigree.get("dam_id"),
+            pedigree.get("dam_name"),
+            pedigree.get("broodmare_sire_id"),
+            pedigree.get("broodmare_sire_name"),
+            pedigree["pedigree_fetch_status"],
+            pedigree.get("pedigree_fetch_error"),
+            pedigree["horse_id"],
+        ],
+    )
 
 
 def upsert_place(cur: sqlite3.Cursor, odds: dict) -> None:

@@ -7,6 +7,7 @@ from src.common.logger import get_logger
 from src.data.database import (
     connect,
     get_race_ids_in_db,
+    upsert_horse_pending,
     upsert_place,
     upsert_race,
     upsert_runner,
@@ -179,6 +180,7 @@ def run(race_list_url: str, mode: str = "manual", limit: int | None = None) -> N
                 if r_normalized_runners.success:
                     for runner in r_normalized_runners.value:
                         upsert_runner(cur, runner)
+                        upsert_horse_pending(cur, runner.get("horse_id"), runner.get("horse_name"))
                 else:
                     logger.error("race_id=%s normalize_runners failed %s", race_id, r_normalized_runners.error)
                     failed = True
