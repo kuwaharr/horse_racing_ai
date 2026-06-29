@@ -12,6 +12,7 @@ if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
 from src.common.logger import get_logger
+from src.data.database import get_race_ids_in_db
 from src.data.paths import DB_PATH
 from src.pipelines.scrape_to_db import (
     increment_page,
@@ -30,6 +31,13 @@ def _current_page_from_url(url: str) -> int:
     parsed = urlparse(url)
     qs = parse_qs(parsed.query)
     return int(qs.get("page", ["1"])[0])
+
+
+def _check_race_ids_in_db(db_path: Path) -> int:
+    race_ids_in_db = get_race_ids_in_db(db_path)
+    n = len(race_ids_in_db)
+    logger.info("Found %s race_ids in DB", n)
+    return n
 
 
 def _start_command_listener() -> queue.Queue[str]:
@@ -174,6 +182,8 @@ def main() -> None:
         args.stop_command,
     )
 
+    _check_race_ids_in_db(args.db)
+
     commands = _start_command_listener()
     url = args.url
     current_page = _current_page_from_url(url)
@@ -185,6 +195,7 @@ def main() -> None:
 
         stop_requested = _consume_stop_command(commands, args.stop_command)
         _maybe_run_pedigree_backfill(args)
+        _check_race_ids_in_db(args.db)
         if stop_requested:
             logger.info("Stopped after page %s and pedigree backfill", current_page)
             break

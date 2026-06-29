@@ -304,13 +304,13 @@ def run(
             logger.info("Scraped all pages")
             return
 
-        logger.info("page=%s Found %s race_ids in race list page", current_page, n_race_ids)
+        logger.info("Page %s found %s race_ids in race list page", current_page, n_race_ids)
 
         for i, race_id in enumerate(race_ids, start=1):
             logger.info("%s/%s race_id=%s Processing", i, n_race_ids, race_id)
             scrape_race(race_id)
 
-        logger.info("page=%s Done", current_page)
+        logger.info("Page %s done", current_page)
 
         check_race_ids_in_db()
 
