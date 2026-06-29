@@ -22,7 +22,7 @@ from scripts.search_prediction_consensus_rules import (
 )
 from src.data.paths import FEAT_DIR, MODEL_DIR
 from src.features.place_top3 import default_eval_odds_dataset_name, default_training_dataset_name
-from src.models.place_top3_catboost import build_catboost_walk_forward_predictions
+from src.models.place_top3_catboost import _catboost_params, build_catboost_walk_forward_predictions
 
 
 PEDIGREE_DROP_PATTERNS = [
@@ -92,6 +92,7 @@ def _write_predictions(
     n_splits: int,
     min_train_ratio: float,
     drop_feature_patterns: list[str] | None,
+    catboost_params: dict[str, Any],
 ) -> dict[str, Any]:
     report = build_catboost_walk_forward_predictions(
         training_dataset_path=training_dataset,
@@ -100,6 +101,7 @@ def _write_predictions(
         n_splits=n_splits,
         min_train_ratio=min_train_ratio,
         drop_feature_patterns=drop_feature_patterns,
+        catboost_params=catboost_params,
     )
     output.parent.mkdir(parents=True, exist_ok=True)
     report["predictions"].to_parquet(output, index=False, engine=engine)
@@ -243,7 +245,19 @@ def main() -> None:
         default=MODEL_DIR / "pedigree_place_top3_rules.csv",
     )
     arg_parser.add_argument("--top-n", type=int, default=10)
+    arg_parser.add_argument("--iterations", type=int, default=500)
+    arg_parser.add_argument("--learning-rate", type=float, default=0.03)
+    arg_parser.add_argument("--depth", type=int, default=6)
+    arg_parser.add_argument("--l2-leaf-reg", type=float, default=5.0)
+    arg_parser.add_argument("--random-seed", type=int, default=42)
     args = arg_parser.parse_args()
+    catboost_params = _catboost_params(
+        iterations=args.iterations,
+        learning_rate=args.learning_rate,
+        depth=args.depth,
+        l2_leaf_reg=args.l2_leaf_reg,
+        random_seed=args.random_seed,
+    )
 
     print(f"Training dataset: {args.training_dataset}")
     print(f"Evaluation odds dataset: {args.odds_dataset}")
@@ -268,6 +282,7 @@ def main() -> None:
             n_splits=args.n_splits,
             min_train_ratio=args.min_train_ratio,
             drop_feature_patterns=None,
+            catboost_params=catboost_params,
         )
         no_pedigree_report = _write_predictions(
             training_dataset=args.training_dataset,
@@ -277,6 +292,7 @@ def main() -> None:
             n_splits=args.n_splits,
             min_train_ratio=args.min_train_ratio,
             drop_feature_patterns=PEDIGREE_DROP_PATTERNS,
+            catboost_params=catboost_params,
         )
         print("")
         _print_prediction_report("Pedigree predictions", args.pedigree_predictions, pedigree_report)

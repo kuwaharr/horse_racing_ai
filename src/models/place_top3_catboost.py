@@ -39,6 +39,35 @@ CATBOOST_CATEGORICAL_COLUMNS = [
 ]
 
 
+DEFAULT_CATBOOST_PARAMS = {
+    "iterations": 500,
+    "learning_rate": 0.03,
+    "depth": 6,
+    "l2_leaf_reg": 5.0,
+    "random_seed": 42,
+}
+
+
+def _catboost_params(
+    iterations: int = 500,
+    learning_rate: float = 0.03,
+    depth: int = 6,
+    l2_leaf_reg: float = 5.0,
+    random_seed: int = 42,
+) -> dict[str, Any]:
+    params = dict(DEFAULT_CATBOOST_PARAMS)
+    params.update(
+        {
+            "iterations": iterations,
+            "learning_rate": learning_rate,
+            "depth": depth,
+            "l2_leaf_reg": l2_leaf_reg,
+            "random_seed": random_seed,
+        }
+    )
+    return params
+
+
 def _drop_feature_patterns(df, patterns: list[str] | None):
     if not patterns:
         return df, []
@@ -77,6 +106,7 @@ def _fit_and_evaluate_catboost_split(
     odds_df,
     stake: float,
     min_rule_selections: int,
+    catboost_params: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     try:
         from catboost import CatBoostClassifier
@@ -91,14 +121,15 @@ def _fit_and_evaluate_catboost_split(
     train_y = train_df["target_top3"]
     test_y = test_df["target_top3"]
 
+    params = dict(DEFAULT_CATBOOST_PARAMS if catboost_params is None else catboost_params)
     model = CatBoostClassifier(
         loss_function="Logloss",
         eval_metric="AUC",
-        iterations=500,
-        learning_rate=0.03,
-        depth=6,
-        l2_leaf_reg=5.0,
-        random_seed=42,
+        iterations=params["iterations"],
+        learning_rate=params["learning_rate"],
+        depth=params["depth"],
+        l2_leaf_reg=params["l2_leaf_reg"],
+        random_seed=params["random_seed"],
         verbose=False,
         allow_writing_files=False,
     )
@@ -148,6 +179,7 @@ def _fit_and_evaluate_catboost_split(
             {"feature": feature, "importance": float(importance)}
             for feature, importance in zip(feature_cols, model.get_feature_importance())
         ],
+        "catboost_params": params,
         "metrics": {
             "auc": float(roc_auc_score(test_y, pred)),
             "logloss": float(log_loss(test_y, pred)),
@@ -167,6 +199,7 @@ def evaluate_place_top3_catboost_walk_forward(
     min_train_ratio: float = 0.5,
     stake: float = 100.0,
     min_rule_selections: int = 30,
+    catboost_params: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     training_df = _read_parquet(training_dataset_path, engine)
     odds_df = _read_parquet(odds_dataset_path, engine)
@@ -185,6 +218,7 @@ def evaluate_place_top3_catboost_walk_forward(
             odds_df=odds_df,
             stake=stake,
             min_rule_selections=min_rule_selections,
+            catboost_params=catboost_params,
         )
         categorical_features = split_report["categorical_features"]
 
@@ -225,6 +259,7 @@ def evaluate_place_top3_catboost_walk_forward(
         "n_splits": len(fold_reports),
         "min_train_ratio": min_train_ratio,
         "min_rule_selections": min_rule_selections,
+        "catboost_params": dict(DEFAULT_CATBOOST_PARAMS if catboost_params is None else catboost_params),
         "folds": fold_reports,
         "rule_summary": _summarize_rules(rule_rows, n_folds=len(fold_reports))[:20],
         "condition_summary": _summarize_condition_rules(rule_rows, n_folds=len(fold_reports))[:20],
@@ -250,6 +285,7 @@ def evaluate_fixed_place_top3_catboost_rule_walk_forward(
     surface_id: int | None = None,
     drop_feature_patterns: list[str] | None = None,
     train_surface_id: int | None = None,
+    catboost_params: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     training_df = _read_parquet(training_dataset_path, engine)
     training_df, dropped_features = _drop_feature_patterns(training_df, drop_feature_patterns)
@@ -271,6 +307,7 @@ def evaluate_fixed_place_top3_catboost_rule_walk_forward(
             odds_df=odds_df,
             stake=stake,
             min_rule_selections=1,
+            catboost_params=catboost_params,
         )
         selected = _apply_fixed_rule(
             split_report["eval_df"],
@@ -324,6 +361,7 @@ def evaluate_fixed_place_top3_catboost_rule_walk_forward(
             "distance_max": None,
             "surface_id": train_surface_id,
         },
+        "catboost_params": dict(DEFAULT_CATBOOST_PARAMS if catboost_params is None else catboost_params),
         "rule": {
             "pred_min": pred_min,
             "odds_min": odds_min,
@@ -353,6 +391,7 @@ def build_catboost_walk_forward_predictions(
     stake: float = 100.0,
     drop_feature_patterns: list[str] | None = None,
     train_surface_id: int | None = None,
+    catboost_params: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     training_df = _read_parquet(training_dataset_path, engine)
     training_df, dropped_features = _drop_feature_patterns(training_df, drop_feature_patterns)
@@ -374,6 +413,7 @@ def build_catboost_walk_forward_predictions(
             odds_df=odds_df,
             stake=stake,
             min_rule_selections=1,
+            catboost_params=catboost_params,
         )
         eval_df = split_report["eval_df"].copy()
         eval_df["fold"] = fold_idx
@@ -411,6 +451,7 @@ def build_catboost_walk_forward_predictions(
         "train_filter": {
             "surface_id": train_surface_id,
         },
+        "catboost_params": dict(DEFAULT_CATBOOST_PARAMS if catboost_params is None else catboost_params),
         "dropped_features": dropped_features,
         "folds": fold_reports,
         "predictions": predictions,

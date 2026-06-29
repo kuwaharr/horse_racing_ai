@@ -8,7 +8,7 @@ if str(ROOT_DIR) not in sys.path:
 
 from src.data.paths import FEAT_DIR
 from src.features.place_top3 import default_eval_odds_dataset_name, default_training_dataset_name
-from src.models.place_top3_catboost import evaluate_fixed_place_top3_catboost_rule_walk_forward
+from src.models.place_top3_catboost import _catboost_params, evaluate_fixed_place_top3_catboost_rule_walk_forward
 from src.models.place_top3_lgbm import format_fixed_rule_report
 
 
@@ -49,8 +49,20 @@ def main() -> None:
     arg_parser.add_argument("--surface-id", type=_optional_int, default=None)
     arg_parser.add_argument("--drop-feature-patterns", type=_optional_str_list, default=None)
     arg_parser.add_argument("--train-surface-id", type=_optional_int, default=None)
+    arg_parser.add_argument("--iterations", type=int, default=500)
+    arg_parser.add_argument("--learning-rate", type=float, default=0.03)
+    arg_parser.add_argument("--depth", type=int, default=6)
+    arg_parser.add_argument("--l2-leaf-reg", type=float, default=5.0)
+    arg_parser.add_argument("--random-seed", type=int, default=42)
     args = arg_parser.parse_args()
 
+    catboost_params = _catboost_params(
+        iterations=args.iterations,
+        learning_rate=args.learning_rate,
+        depth=args.depth,
+        l2_leaf_reg=args.l2_leaf_reg,
+        random_seed=args.random_seed,
+    )
     report = evaluate_fixed_place_top3_catboost_rule_walk_forward(
         training_dataset_path=args.training_dataset,
         odds_dataset_path=args.odds_dataset,
@@ -69,6 +81,7 @@ def main() -> None:
         surface_id=args.surface_id,
         drop_feature_patterns=args.drop_feature_patterns,
         train_surface_id=args.train_surface_id,
+        catboost_params=catboost_params,
     )
     print(format_fixed_rule_report(report))
 
