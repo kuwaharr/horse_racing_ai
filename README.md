@@ -131,7 +131,7 @@ python scripts\scrape_to_db.py --url "<netkeibaのレース一覧URL>" --mode au
 レース一覧をページ単位で取得し、各ページ完了後に血統pending数が一定以上ならpendingがなくなるまで血統取得も実行する場合:
 
 ```powershell
-python scripts\scrape_with_pedigree_backfill.py --url "<netkeibaのレース一覧URL>" --pedigree-threshold 100 --pedigree-sleep 1.5
+python scripts\scrape_with_pedigree_backfill.py --url "<netkeibaのレース一覧URL>" --pedigree-threshold 100
 ```
 
 このスクリプトで`stop`と入力してEnterを押すと、現在ページの処理を終え、血統pending確認と必要な血統取得まで実行してから停止します。停止文字列を変える場合:
@@ -167,10 +167,10 @@ python scripts\backfill_horses_from_runners.py
 未取得の血統情報を取得する場合:
 
 ```powershell
-python scripts\fetch_pending_horse_pedigrees.py --limit 100 --sleep 1.5
+python scripts\fetch_pending_horse_pedigrees.py --limit 100
 ```
 
-血統取得は`https://db.netkeiba.com/horse/ped/<horse_id>/`から取得します。`--limit`は1回の実行で取得する最大頭数、`--sleep`は1頭ごとの待機秒数です。
+血統取得は`https://db.netkeiba.com/horse/ped/<horse_id>/`から取得します。`--limit`は1回の実行で取得する最大頭数です。1頭ごとの待機は常に1.5秒から2.0秒のランダム値です。
 
 血統取得をどこまで進めると出走馬行カバー率が何%になるか確認する場合:
 
@@ -181,20 +181,20 @@ python scripts\estimate_pedigree_fetch_coverage.py
 `pending`が0になるまで取得し続ける場合:
 
 ```powershell
-python scripts\fetch_pending_horse_pedigrees.py --until-empty --sleep 1.5
+python scripts\fetch_pending_horse_pedigrees.py --until-empty
 ```
 
 モデル用データの血統カバー率を早く上げたい場合は、出走回数が多い馬から優先して取得します:
 
 ```powershell
-python scripts\fetch_pending_horse_pedigrees.py --limit 100 --sleep 1.5 --order-by runner_count
+python scripts\fetch_pending_horse_pedigrees.py --limit 100 --order-by runner_count
 ```
 
 `--order-by runner_count`は`runner.horse_id`を集計するため、既存DBでは先に`python scripts\ensure_db_indexes.py`を実行しておくと高速です。
 SQLiteは同時書き込みが1つに制限されます。別のスクレイピング処理と同時に動かす場合は、血統取得側がロック解除を待ってDB更新を再試行します。待ち時間を長めにする場合:
 
 ```powershell
-python scripts\fetch_pending_horse_pedigrees.py --limit 100 --sleep 1.5 --order-by runner_count --db-retries 10 --db-retry-sleep 3
+python scripts\fetch_pending_horse_pedigrees.py --limit 100 --order-by runner_count --db-retries 10 --db-retry-sleep 3
 ```
 
 レース取得側のDB保存もロック解除を待って再試行します。それでも`database is locked`が続く場合は、同時に動かすDB書き込みプロセスを1つに絞ってください。
@@ -202,13 +202,13 @@ python scripts\fetch_pending_horse_pedigrees.py --limit 100 --sleep 1.5 --order-
 失敗済みの馬も再試行する場合:
 
 ```powershell
-python scripts\fetch_pending_horse_pedigrees.py --limit 100 --sleep 1.5 --include-failed
+python scripts\fetch_pending_horse_pedigrees.py --limit 100 --include-failed
 ```
 
 特定の1頭だけ取得し直す場合:
 
 ```powershell
-python scripts\fetch_pending_horse_pedigrees.py --horse-id 2014104716 --sleep 0
+python scripts\fetch_pending_horse_pedigrees.py --horse-id 2014104716
 ```
 
 複勝3着内予測用の学習データセットをParquetで作成する場合:

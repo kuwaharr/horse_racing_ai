@@ -90,8 +90,6 @@ def _run_pedigree_backfill(args) -> None:
         "--db",
         str(args.db),
         "--until-empty",
-        "--sleep",
-        str(args.pedigree_sleep),
         "--db-retries",
         str(args.pedigree_db_retries),
         "--db-retry-sleep",
@@ -148,7 +146,6 @@ def main() -> None:
     arg_parser.add_argument("--limit-pages", type=int, default=None)
     arg_parser.add_argument("--stop-command", default="stop")
     arg_parser.add_argument("--pedigree-threshold", type=int, default=100)
-    arg_parser.add_argument("--pedigree-sleep", type=float, default=1.5)
     arg_parser.add_argument("--pedigree-db-retries", type=int, default=5)
     arg_parser.add_argument("--pedigree-db-retry-sleep", type=float, default=2.0)
     arg_parser.add_argument(

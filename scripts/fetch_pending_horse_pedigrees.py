@@ -1,4 +1,5 @@
 import argparse
+import random
 import sys
 import time
 from pathlib import Path
@@ -21,6 +22,9 @@ from src.scrape.fetchers import make_horse_pedigree_url, make_soup
 
 
 logger = get_logger("scripts.fetch_pending_horse_pedigrees", log_file="fetch_pending_horse_pedigrees.log")
+
+PEDIGREE_REQUEST_SLEEP_MIN = 1.5
+PEDIGREE_REQUEST_SLEEP_MAX = 2.0
 
 
 def _failed_pedigree(horse_id: str, horse_name: str | None, error: str) -> dict:
@@ -63,12 +67,17 @@ def _save_pedigree_result(args, pedigree: dict) -> None:
         )
 
 
+def _sleep_between_pedigree_requests() -> None:
+    sleep_sec = random.uniform(PEDIGREE_REQUEST_SLEEP_MIN, PEDIGREE_REQUEST_SLEEP_MAX)
+    logger.info("Sleeping %.2f seconds before next pedigree request", sleep_sec)
+    time.sleep(sleep_sec)
+
+
 def main() -> None:
     arg_parser = argparse.ArgumentParser()
     arg_parser.add_argument("--db", type=Path, default=DB_PATH)
     arg_parser.add_argument("--limit", type=int, default=20)
     arg_parser.add_argument("--until-empty", action="store_true")
-    arg_parser.add_argument("--sleep", type=float, default=1.0)
     arg_parser.add_argument("--include-failed", action="store_true")
     arg_parser.add_argument("--horse-id", default=None)
     arg_parser.add_argument("--db-retries", type=int, default=5)
@@ -85,11 +94,12 @@ def main() -> None:
     fetched = 0
     failed = 0
     logger.info(
-        "Starting pedigree fetch db=%s limit=%s until_empty=%s sleep=%s include_failed=%s horse_id=%s order_by=%s",
+        "Starting pedigree fetch db=%s limit=%s until_empty=%s sleep_range=%.1f-%.1f include_failed=%s horse_id=%s order_by=%s",
         args.db,
         args.limit,
         args.until_empty,
-        args.sleep,
+        PEDIGREE_REQUEST_SLEEP_MIN,
+        PEDIGREE_REQUEST_SLEEP_MAX,
         args.include_failed,
         args.horse_id,
         args.order_by,
@@ -121,7 +131,7 @@ def main() -> None:
                 args,
                 _failed_pedigree(horse_id, horse["horse_name"], soup_result.error or "fetch failed"),
             )
-            time.sleep(args.sleep)
+            _sleep_between_pedigree_requests()
             continue
 
         pedigree_result = extract_horse_pedigree(soup_result.value, horse_id)
@@ -136,13 +146,13 @@ def main() -> None:
                     pedigree_result.error or "parse failed",
                 ),
             )
-            time.sleep(args.sleep)
+            _sleep_between_pedigree_requests()
             continue
 
         _save_pedigree_result(args, pedigree_result.value)
         fetched += 1
         logger.info("horse_id=%s fetched", horse_id)
-        time.sleep(args.sleep)
+        _sleep_between_pedigree_requests()
 
         if args.horse_id is not None:
             break
