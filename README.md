@@ -344,13 +344,19 @@ python scripts\evaluate_fixed_place_top3_catboost_rule.py --engine fastparquet -
 python scripts\evaluate_fixed_place_top3_catboost_rule.py --engine fastparquet --train-surface-id 0 --surface-id 0
 ```
 
-現時点の代表確認は、保存済みCatBoost予測から購入率20%以上の候補を探索する流れです。最新DB反映後のデフォルト予測では、`pred_top3>=0.36`、複勝オッズ中間値`[3.2,6.0)`、距離`1200m以上`、開催場`3,7,10`除外が上位候補です。walk-forward 4 foldで603レース、716点、225的中、的中率31.42%、購入率21.75%、複勝オッズ中間値ベース回収率126.81%でした。
+現時点の代表確認は、保存済みCatBoost予測から購入率20%以上の候補を探索する流れです。学習データにはレース後に確定する`popularity`、単勝オッズ、複勝オッズを含めません。これらは予測後の回収率評価と買い基準検証にだけ使います。最新DB反映後のデフォルト予測では、`pred_top3>=0.34`、複勝オッズ中間値`[3.2,6.0)`、距離`1200m以上`、開催場`3,7,10`除外、同一レース内の予測順位`5位以内`、`pred_top3 * 複勝オッズ中間値 >= 1.4`が上位候補です。walk-forward 4 foldで571レース、671点、212的中、的中率31.59%、購入率20.59%、複勝オッズ中間値ベース回収率133.09%でした。順位/期待値条件なしの旧候補は603レース、716点、225的中、的中率31.42%、購入率21.75%、回収率126.81%でした。
 
 CatBoostのwalk-forward予測を保存し、重い再学習を避けて買い条件だけを高速に検証する場合:
 
 ```powershell
 python scripts\generate_catboost_predictions.py --engine fastparquet
 python scripts\evaluate_fixed_rule_from_predictions.py --engine fastparquet --pred-min 0.40
+```
+
+購入率20%以上を維持した改善候補を再評価する場合:
+
+```powershell
+python scripts\evaluate_fixed_rule_from_predictions.py --engine fastparquet --pred-min 0.34 --odds-min 3.2 --odds-max 6.0 --distance-min 1200 --distance-max none --exclude-track-ids "3,7,10" --pred-rank-max 5 --ev-mid-min 1.4
 ```
 
 特徴量グループを除外した予測キャッシュを作る場合:
@@ -383,6 +389,12 @@ python scripts\search_rules_from_predictions.py --engine fastparquet --min-selec
 
 ```powershell
 python scripts\search_rules_from_predictions.py --engine fastparquet --min-buy-rate 20 --min-selections 70
+```
+
+同一レース内の予測順位と、予測確率に複勝オッズ中間値を掛けた期待値条件も含めて探索する場合:
+
+```powershell
+python scripts\search_rules_from_predictions.py --engine fastparquet --min-buy-rate 20 --min-selections 70 --min-fold-selections 10 --include-rank-ev-filters
 ```
 
 各foldの回収率下限も指定して、不安定な候補を除外する場合:

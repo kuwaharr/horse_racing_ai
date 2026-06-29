@@ -15,6 +15,7 @@ from src.models.place_top3_lgbm import (
     format_walk_forward_report,
     _summarize_condition_rules,
     _summarize_rules,
+    _training_feature_columns,
 )
 
 
@@ -87,7 +88,7 @@ def _filter_by_surface(df, surface_id: int | None):
 
 
 def _prepare_catboost_features(train_df, test_df):
-    feature_cols = [c for c in train_df.columns if c not in EXCLUDE_FEATURE_COLUMNS]
+    feature_cols = _training_feature_columns(train_df)
     train_x = train_df[feature_cols].copy()
     test_x = test_df[feature_cols].copy()
 

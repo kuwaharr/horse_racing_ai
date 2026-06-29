@@ -25,6 +25,12 @@ def _optional_int_list(value: str) -> list[int] | None:
     return [int(v.strip()) for v in value.split(",") if v.strip()]
 
 
+def _optional_float(value: str) -> float | None:
+    if value.lower() in {"none", "null", ""}:
+        return None
+    return float(value)
+
+
 def _format_pct(value: float | None) -> str:
     return "n/a" if value is None else f"{value:.2f}%"
 
@@ -43,6 +49,8 @@ def main() -> None:
     arg_parser.add_argument("--include-track-ids", type=_optional_int_list, default=None)
     arg_parser.add_argument("--exclude-track-ids", type=_optional_int_list, default=None)
     arg_parser.add_argument("--surface-id", type=_optional_int, default=None)
+    arg_parser.add_argument("--pred-rank-max", type=_optional_int, default=None)
+    arg_parser.add_argument("--ev-mid-min", type=_optional_float, default=None)
     args = arg_parser.parse_args()
 
     try:
@@ -51,6 +59,15 @@ def main() -> None:
         raise RuntimeError("保存済み予測評価には pandas が必要です。") from e
 
     predictions = pd.read_parquet(args.predictions, engine=args.engine)
+    if args.pred_rank_max is not None:
+        predictions = predictions.copy()
+        predictions["pred_rank"] = predictions.groupby("race_id")["pred_top3"].rank(
+            method="first",
+            ascending=False,
+        )
+    if args.ev_mid_min is not None:
+        predictions = predictions.copy()
+        predictions["expected_value_mid"] = predictions["pred_top3"] * predictions["place_odds_mid"]
     selected = _apply_fixed_rule(
         predictions,
         pred_min=args.pred_min,
@@ -63,6 +80,10 @@ def main() -> None:
         exclude_track_ids=args.exclude_track_ids,
         surface_id=args.surface_id,
     )
+    if args.pred_rank_max is not None:
+        selected = selected[selected["pred_rank"] <= args.pred_rank_max]
+    if args.ev_mid_min is not None:
+        selected = selected[selected["expected_value_mid"] >= args.ev_mid_min]
     selected = selected.copy()
     selected["month"] = selected["date"].str.slice(0, 7)
     overall = _selection_summary(selected, args.stake)
@@ -78,7 +99,9 @@ def main() -> None:
         f"track_id={args.track_id}, "
         f"include_track_ids={args.include_track_ids}, "
         f"exclude_track_ids={args.exclude_track_ids}, "
-        f"surface_id={args.surface_id}"
+        f"surface_id={args.surface_id}, "
+        f"pred_rank_max={args.pred_rank_max}, "
+        f"ev_mid_min={args.ev_mid_min}"
     )
     print("")
     print("Overall")

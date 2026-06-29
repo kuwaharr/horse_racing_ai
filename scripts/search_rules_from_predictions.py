@@ -17,7 +17,7 @@ def _format_pct(value: float | None) -> str:
     return "n/a" if value is None else f"{value:.2f}%"
 
 
-def _candidate_rules(profile: str = "place") -> list[dict]:
+def _candidate_rules(profile: str = "place", include_rank_ev_filters: bool = False) -> list[dict]:
     if profile == "place":
         pred_thresholds = [0.30, 0.32, 0.34, 0.35, 0.36, 0.38, 0.40, 0.45, 0.50]
         odds_ranges = [
@@ -89,6 +89,11 @@ def _candidate_rules(profile: str = "place") -> list[dict]:
         ("include_4_5_6_8_9", [4, 5, 6, 8, 9], None),
     ]
     surface_filters = [None, 0, 1]
+    rank_filters = [None]
+    ev_mid_filters = [None]
+    if include_rank_ev_filters:
+        rank_filters = [None, 4, 5, 6, 8]
+        ev_mid_filters = [None, 1.2, 1.3, 1.4]
 
     candidates = []
     for pred_min in pred_thresholds:
@@ -96,29 +101,36 @@ def _candidate_rules(profile: str = "place") -> list[dict]:
             for distance_min, distance_max in distance_ranges:
                 for track_label, include_track_ids, exclude_track_ids in track_filters:
                     for surface_id in surface_filters:
-                        candidates.append(
-                            {
-                                "pred_min": pred_min,
-                                "odds_min": odds_min,
-                                "odds_max": odds_max,
-                                "distance_min": distance_min,
-                                "distance_max": distance_max,
-                                "track_label": track_label,
-                                "include_track_ids": include_track_ids,
-                                "exclude_track_ids": exclude_track_ids,
-                                "surface_id": surface_id,
-                            }
-                        )
+                        for pred_rank_max in rank_filters:
+                            for ev_mid_min in ev_mid_filters:
+                                candidates.append(
+                                    {
+                                        "pred_min": pred_min,
+                                        "odds_min": odds_min,
+                                        "odds_max": odds_max,
+                                        "distance_min": distance_min,
+                                        "distance_max": distance_max,
+                                        "track_label": track_label,
+                                        "include_track_ids": include_track_ids,
+                                        "exclude_track_ids": exclude_track_ids,
+                                        "surface_id": surface_id,
+                                        "pred_rank_max": pred_rank_max,
+                                        "ev_mid_min": ev_mid_min,
+                                    }
+                                )
     return candidates
 
 
 def _rule_key(rule: dict) -> str:
     distance = f"[{rule['distance_min']},{rule['distance_max']})"
     surface = "all" if rule["surface_id"] is None else str(rule["surface_id"])
+    rank = "all" if rule["pred_rank_max"] is None else f"<={rule['pred_rank_max']}"
+    ev_mid = "all" if rule["ev_mid_min"] is None else f">={rule['ev_mid_min']:.1f}"
     return (
         f"pred>={rule['pred_min']:.2f}|"
         f"odds=[{rule['odds_min']:.1f},{rule['odds_max']:.1f})|"
-        f"distance={distance}|track={rule['track_label']}|surface={surface}"
+        f"distance={distance}|track={rule['track_label']}|surface={surface}|"
+        f"rank={rank}|ev_mid={ev_mid}"
     )
 
 
@@ -130,7 +142,7 @@ def _build_fast_context(predictions) -> dict[str, Any]:
         raise RuntimeError("保存済み予測の高速ルール探索には pandas と numpy が必要です。") from e
 
     race_codes = pd.factorize(predictions["race_id"], sort=False)[0]
-    return {
+    context = {
         "np": np,
         "race_codes": race_codes,
         "fold": predictions["fold"].to_numpy(),
@@ -144,6 +156,15 @@ def _build_fast_context(predictions) -> dict[str, Any]:
         "target_top3": predictions["target_top3"].to_numpy(),
         "fold_values": predictions["fold"].dropna().unique(),
     }
+    context["pred_rank"] = (
+        predictions.groupby("race_id")["pred_top3"]
+        .rank(method="first", ascending=False)
+        .to_numpy()
+    )
+    context["expected_value_mid"] = (
+        predictions["pred_top3"] * predictions["place_odds_mid"]
+    ).to_numpy()
+    return context
 
 
 def _summary_from_mask(context: dict[str, Any], mask, stake: float) -> dict[str, Any]:
@@ -183,6 +204,10 @@ def _mask_for_rule(context: dict[str, Any], rule: dict):
         mask &= ~np.isin(context["track_id"], rule["exclude_track_ids"])
     if rule["surface_id"] is not None:
         mask &= context["surface_id"] == rule["surface_id"]
+    if rule["pred_rank_max"] is not None:
+        mask &= context["pred_rank"] <= rule["pred_rank_max"]
+    if rule["ev_mid_min"] is not None:
+        mask &= context["expected_value_mid"] >= rule["ev_mid_min"]
     return mask
 
 
@@ -235,6 +260,7 @@ def main() -> None:
     arg_parser.add_argument("--min-buy-rate", type=float, default=None)
     arg_parser.add_argument("--max-buy-rate", type=float, default=None)
     arg_parser.add_argument("--profile", choices=["place", "win"], default="place")
+    arg_parser.add_argument("--include-rank-ev-filters", action="store_true")
     arg_parser.add_argument("--top-n", type=int, default=20)
     args = arg_parser.parse_args()
 
@@ -247,7 +273,7 @@ def main() -> None:
     total_races = int(predictions["race_id"].nunique())
     fast_context = _build_fast_context(predictions)
     results = []
-    for rule in _candidate_rules(args.profile):
+    for rule in _candidate_rules(args.profile, include_rank_ev_filters=args.include_rank_ev_filters):
         result = _evaluate_rule(
             fast_context,
             rule,
@@ -283,6 +309,7 @@ def main() -> None:
     print(f"Min buy rate: {args.min_buy_rate}")
     print(f"Max buy rate: {args.max_buy_rate}")
     print(f"Profile: {args.profile}")
+    print(f"Include rank/EV filters: {args.include_rank_ev_filters}")
     print("")
     print(
         "rule_key                                                        races  buy_rate  selections  "

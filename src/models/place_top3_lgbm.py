@@ -11,6 +11,23 @@ ID_COLUMNS = [
     "broodmare_sire_id",
 ]
 EXCLUDE_FEATURE_COLUMNS = {"race_id", "date", "horse_name", "target_top3"}
+LEAKAGE_FEATURE_COLUMNS = {
+    "popularity",
+    "win_odds",
+    "place_odds_min",
+    "place_odds_max",
+    "place_odds_mid",
+}
+
+
+def _training_feature_columns(df) -> list[str]:
+    leaked = sorted(c for c in LEAKAGE_FEATURE_COLUMNS if c in df.columns)
+    if leaked:
+        raise ValueError(
+            "Training data contains post-race popularity/odds columns that would leak: "
+            + ", ".join(leaked)
+        )
+    return [c for c in df.columns if c not in EXCLUDE_FEATURE_COLUMNS]
 
 
 def _read_parquet(path: Path, engine: str):
@@ -59,7 +76,7 @@ def _filter_by_distance(df, distance_min: int | None, distance_max: int | None):
 
 
 def _prepare_features(train_df, test_df):
-    feature_cols = [c for c in train_df.columns if c not in EXCLUDE_FEATURE_COLUMNS]
+    feature_cols = _training_feature_columns(train_df)
 
     train_x = train_df[feature_cols].copy()
     test_x = test_df[feature_cols].copy()
