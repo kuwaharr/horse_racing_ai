@@ -18,7 +18,7 @@ def _format_pct(value: float | None) -> str:
 
 
 def _candidate_rules() -> list[dict]:
-    pred_thresholds = [0.35, 0.4, 0.45, 0.5]
+    pred_thresholds = [0.30, 0.32, 0.34, 0.35, 0.36, 0.38, 0.40, 0.45, 0.50]
     odds_ranges = [
         (2.0, 3.0),
         (2.5, 5.0),
@@ -26,10 +26,20 @@ def _candidate_rules() -> list[dict]:
         (3.0, 4.0),
         (3.0, 5.0),
         (3.0, 6.0),
+        (3.2, 5.8),
+        (3.2, 6.0),
         (4.0, 5.0),
         (5.0, 10.0),
     ]
-    distance_ranges = [(None, None), (1400, 1800), (1800, 2200), (2200, None)]
+    distance_ranges = [
+        (None, None),
+        (1200, None),
+        (1400, 1800),
+        (1400, None),
+        (1600, 2200),
+        (1800, 2200),
+        (2200, None),
+    ]
     track_filters = [
         ("all", None, None),
         ("exclude_7_10", None, [7, 10]),
@@ -78,6 +88,7 @@ def _evaluate_rule(
     stake: float,
     min_fold_selections: int,
     min_fold_return_mid: float | None,
+    total_races: int,
 ) -> dict | None:
     selected = _apply_fixed_rule(
         predictions,
@@ -109,6 +120,7 @@ def _evaluate_rule(
     result = dict(rule)
     result.update(overall)
     result["rule_key"] = _rule_key(rule)
+    result["buy_rate_pct"] = None if total_races == 0 else result["races"] / total_races * 100
     result["min_fold_return_mid_pct"] = min(fold_returns)
     result["max_fold_return_mid_pct"] = max(fold_returns)
     result["min_fold_selections"] = min(fold_selections)
@@ -123,6 +135,8 @@ def main() -> None:
     arg_parser.add_argument("--min-selections", type=int, default=100)
     arg_parser.add_argument("--min-fold-selections", type=int, default=10)
     arg_parser.add_argument("--min-fold-return-mid", type=float, default=None)
+    arg_parser.add_argument("--min-buy-rate", type=float, default=None)
+    arg_parser.add_argument("--max-buy-rate", type=float, default=None)
     arg_parser.add_argument("--top-n", type=int, default=20)
     args = arg_parser.parse_args()
 
@@ -132,6 +146,7 @@ def main() -> None:
         raise RuntimeError("保存済み予測のルール探索には pandas が必要です。") from e
 
     predictions = pd.read_parquet(args.predictions, engine=args.engine)
+    total_races = int(predictions["race_id"].nunique())
     results = []
     for rule in _candidate_rules():
         result = _evaluate_rule(
@@ -140,8 +155,13 @@ def main() -> None:
             stake=args.stake,
             min_fold_selections=args.min_fold_selections,
             min_fold_return_mid=args.min_fold_return_mid,
+            total_races=total_races,
         )
         if result is None or result["selections"] < args.min_selections:
+            continue
+        if args.min_buy_rate is not None and result["buy_rate_pct"] < args.min_buy_rate:
+            continue
+        if args.max_buy_rate is not None and result["buy_rate_pct"] > args.max_buy_rate:
             continue
         results.append(result)
 
@@ -157,16 +177,22 @@ def main() -> None:
 
     print(f"Predictions: {args.predictions}")
     print(f"Rows: {len(predictions):,}")
-    print(f"Races: {int(predictions['race_id'].nunique()):,}")
+    print(f"Races: {total_races:,}")
     print(f"Min selections: {args.min_selections}")
     print(f"Min fold selections: {args.min_fold_selections}")
     print(f"Min fold return mid: {args.min_fold_return_mid}")
+    print(f"Min buy rate: {args.min_buy_rate}")
+    print(f"Max buy rate: {args.max_buy_rate}")
     print("")
-    print("rule_key                                                        races  selections  hits  hit_rate  return_mid  min_mid  max_mid  min_fold_n")
+    print(
+        "rule_key                                                        races  buy_rate  selections  "
+        "hits  hit_rate  return_mid  min_mid  max_mid  min_fold_n"
+    )
     for row in results[: args.top_n]:
         print(
             f"{row['rule_key']:<63} "
-            f"{row['races']:>5,}  {row['selections']:>10,}  {row['hits']:>4,}  "
+            f"{row['races']:>5,}  {_format_pct(row['buy_rate_pct']):>8}  "
+            f"{row['selections']:>10,}  {row['hits']:>4,}  "
             f"{_format_pct(row['hit_rate_pct']):>8}  {_format_pct(row['return_mid_pct']):>10}  "
             f"{_format_pct(row['min_fold_return_mid_pct']):>7}  {_format_pct(row['max_fold_return_mid_pct']):>7}  "
             f"{row['min_fold_selections']:>10,}"
