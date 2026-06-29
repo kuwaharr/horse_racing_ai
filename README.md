@@ -367,6 +367,12 @@ python scripts\search_rules_from_predictions.py --engine fastparquet --min-selec
 python scripts\search_rules_from_predictions.py --engine fastparquet --min-selections 120 --min-fold-selections 20 --min-fold-return-mid 100
 ```
 
+血統あり、血統なし、血統あり/なし合議の代表候補を同じ条件で比較する場合:
+
+```powershell
+python scripts\compare_place_top3_prediction_candidates.py --engine fastparquet
+```
+
 この設定では、上記の`pred_top3>=0.40`、複勝オッズ中間値`[3.0,5.0)`、距離`[1800,2200)`、開催場`3,7,10`除外が候補内トップでした。
 探索候補には複勝オッズ中間値の`[2.5,5.0)`、`[3.0,4.0)`、`[4.0,5.0)`、`[3.0,6.0)`なども含めています。
 
