@@ -84,6 +84,11 @@ PORTFOLIOS = [
         "rules": ["union_mid_20_stable", "union_value_odds"],
     },
     {
+        "name": "pedigree_mid_20_stable",
+        "description": "pedigree experiment, near 20 percent stable coverage",
+        "rules": ["pedigree_mid_20_stable_value"],
+    },
+    {
         "name": "mid_25_value_plus_avg",
         "description": "near 25 percent coverage with average-score add-on",
         "rules": ["union_mid_25_value", "avg_balanced"],

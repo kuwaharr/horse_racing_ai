@@ -16,8 +16,9 @@ from scripts.evaluate_prediction_consensus_rules import (
     _load_consensus_predictions,
 )
 from scripts.search_prediction_consensus_rules import (
+    _build_fast_context,
     _candidate_rules,
-    _evaluate_rule,
+    _evaluate_rule_fast,
 )
 from src.data.paths import FEAT_DIR, MODEL_DIR
 from src.features.place_top3 import default_eval_odds_dataset_name, default_training_dataset_name
@@ -166,10 +167,11 @@ def _print_rule_search(
     top_n: int,
 ) -> list[dict[str, Any]]:
     total_races = int(predictions["race_id"].nunique())
+    fast_context = _build_fast_context(predictions)
     results = []
     for rule in _candidate_rules(["intersection", "union", "average"]):
-        result = _evaluate_rule(
-            predictions,
+        result = _evaluate_rule_fast(
+            fast_context,
             rule,
             stake=stake,
             min_fold_selections=min_fold_selections,
