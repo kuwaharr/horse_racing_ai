@@ -5,6 +5,7 @@ import subprocess
 import sys
 import threading
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 if str(ROOT_DIR) not in sys.path:
@@ -23,6 +24,12 @@ from src.scrape.fetchers import make_soup
 
 
 logger = get_logger("scripts.scrape_with_pedigree_backfill", log_file="scrape_with_pedigree_backfill.log")
+
+
+def _current_page_from_url(url: str) -> int:
+    parsed = urlparse(url)
+    qs = parse_qs(parsed.query)
+    return int(qs.get("page", ["1"])[0])
 
 
 def _start_command_listener() -> queue.Queue[str]:
@@ -169,20 +176,22 @@ def main() -> None:
 
     commands = _start_command_listener()
     url = args.url
-    page = 1
-    while args.limit_pages is None or page <= args.limit_pages:
-        page_processed = _process_page(url, page)
+    current_page = _current_page_from_url(url)
+    processed_pages = 0
+    while args.limit_pages is None or processed_pages < args.limit_pages:
+        page_processed = _process_page(url, current_page)
         if not page_processed:
             break
 
         stop_requested = _consume_stop_command(commands, args.stop_command)
         _maybe_run_pedigree_backfill(args)
         if stop_requested:
-            logger.info("Stopped after page %s and pedigree backfill", page)
+            logger.info("Stopped after page %s and pedigree backfill", current_page)
             break
 
         url = increment_page(url)
-        page += 1
+        current_page += 1
+        processed_pages += 1
 
     logger.info("Done")
 
