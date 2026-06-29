@@ -205,6 +205,10 @@ def main() -> None:
         current_page += 1
         processed_pages += 1
 
+    if args.limit_pages is not None and processed_pages >= args.limit_pages:
+        logger.info("Limit pages reached: %s", args.limit_pages)
+        logger.info("Pending pedigrees: %s", _pending_pedigree_count(args.db))
+
     logger.info("Done")
 
 
