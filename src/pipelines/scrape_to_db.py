@@ -274,6 +274,14 @@ def run(
     qs = parse_qs(parsed.query)
     current_page = int(qs.get("page", ["1"])[0])
 
+    logger.info(
+        "Starting scrape url=%s db=%s mode=%s limit=%s stop_command=%s",
+        race_list_url,
+        DB_PATH,
+        mode,
+        limit,
+        auto_stop_command,
+    )
     n_race_ids_in_db = check_race_ids_in_db()
     if limit is not None:
         if n_race_ids_in_db >= limit:

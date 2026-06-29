@@ -171,15 +171,17 @@ def main() -> None:
     args = arg_parser.parse_args()
 
     logger.info(
-        "Starting scrape with pedigree backfill url=%s db=%s pedigree_threshold=%s stop_command=%s",
+        "Starting scrape url=%s db=%s mode=%s limit=%s stop_command=%s pedigree_threshold=%s",
         args.url,
         args.db,
-        args.pedigree_threshold,
+        "auto",
+        args.limit_pages,
         args.stop_command,
+        args.pedigree_threshold,
     )
     _check_race_ids_in_db(args.db)
     logger.info(
-        "Type '%s' and Enter to stop after the current page and pedigree backfill.",
+        "Auto mode command listener started. Type '%s' and Enter to stop after the current page and pedigree backfill.",
         args.stop_command,
     )
 
