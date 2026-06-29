@@ -177,12 +177,11 @@ def main() -> None:
         args.pedigree_threshold,
         args.stop_command,
     )
+    _check_race_ids_in_db(args.db)
     logger.info(
         "Type '%s' and Enter to stop after the current page and pedigree backfill.",
         args.stop_command,
     )
-
-    _check_race_ids_in_db(args.db)
 
     commands = _start_command_listener()
     url = args.url
