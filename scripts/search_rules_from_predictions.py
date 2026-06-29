@@ -1,13 +1,13 @@
 import argparse
 import sys
 from pathlib import Path
+from typing import Any
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
 from src.data.paths import MODEL_DIR
-from src.models.place_top3_lgbm import _apply_fixed_rule, _selection_summary
 
 
 DEFAULT_PREDICTIONS = MODEL_DIR / "catboost_place_top3_predictions.parquet"
@@ -82,36 +82,93 @@ def _rule_key(rule: dict) -> str:
     )
 
 
+def _build_fast_context(predictions) -> dict[str, Any]:
+    try:
+        import numpy as np
+        import pandas as pd
+    except ModuleNotFoundError as e:
+        raise RuntimeError("保存済み予測の高速ルール探索には pandas と numpy が必要です。") from e
+
+    race_codes = pd.factorize(predictions["race_id"], sort=False)[0]
+    return {
+        "np": np,
+        "race_codes": race_codes,
+        "fold": predictions["fold"].to_numpy(),
+        "pred_top3": predictions["pred_top3"].to_numpy(),
+        "place_odds_min": predictions["place_odds_min"].to_numpy(),
+        "place_odds_mid": predictions["place_odds_mid"].to_numpy(),
+        "place_odds_max": predictions["place_odds_max"].to_numpy(),
+        "distance": predictions["distance"].to_numpy(),
+        "track_id": predictions["track_id"].to_numpy(),
+        "surface_id": predictions["surface_id"].to_numpy(),
+        "target_top3": predictions["target_top3"].to_numpy(),
+        "fold_values": predictions["fold"].dropna().unique(),
+    }
+
+
+def _summary_from_mask(context: dict[str, Any], mask, stake: float) -> dict[str, Any]:
+    np = context["np"]
+    selections = int(mask.sum())
+    target = context["target_top3"][mask]
+    hits = int(target.sum())
+    stake_total = selections * stake
+    return_min = float((target * context["place_odds_min"][mask] * stake).sum())
+    return_mid = float((target * context["place_odds_mid"][mask] * stake).sum())
+    return_max = float((target * context["place_odds_max"][mask] * stake).sum())
+    return {
+        "races": int(np.unique(context["race_codes"][mask]).size),
+        "selections": selections,
+        "hits": hits,
+        "hit_rate_pct": None if selections == 0 else hits / selections * 100,
+        "return_min_pct": None if stake_total == 0 else return_min / stake_total * 100,
+        "return_mid_pct": None if stake_total == 0 else return_mid / stake_total * 100,
+        "return_max_pct": None if stake_total == 0 else return_max / stake_total * 100,
+    }
+
+
+def _mask_for_rule(context: dict[str, Any], rule: dict):
+    np = context["np"]
+    mask = (
+        (context["pred_top3"] >= rule["pred_min"])
+        & (context["place_odds_mid"] >= rule["odds_min"])
+        & (context["place_odds_mid"] < rule["odds_max"])
+    )
+    if rule["distance_min"] is not None:
+        mask &= context["distance"] >= rule["distance_min"]
+    if rule["distance_max"] is not None:
+        mask &= context["distance"] < rule["distance_max"]
+    if rule["include_track_ids"] is not None:
+        mask &= np.isin(context["track_id"], rule["include_track_ids"])
+    if rule["exclude_track_ids"] is not None:
+        mask &= ~np.isin(context["track_id"], rule["exclude_track_ids"])
+    if rule["surface_id"] is not None:
+        mask &= context["surface_id"] == rule["surface_id"]
+    return mask
+
+
 def _evaluate_rule(
-    predictions,
+    context: dict[str, Any],
     rule: dict,
     stake: float,
     min_fold_selections: int,
     min_fold_return_mid: float | None,
     total_races: int,
 ) -> dict | None:
-    selected = _apply_fixed_rule(
-        predictions,
-        pred_min=rule["pred_min"],
-        odds_min=rule["odds_min"],
-        odds_max=rule["odds_max"],
-        distance_min=rule["distance_min"],
-        distance_max=rule["distance_max"],
-        track_id=None,
-        include_track_ids=rule["include_track_ids"],
-        exclude_track_ids=rule["exclude_track_ids"],
-        surface_id=rule["surface_id"],
-    )
-    overall = _selection_summary(selected, stake)
+    mask = _mask_for_rule(context, rule)
+    if not mask.any():
+        return None
+
+    overall = _summary_from_mask(context, mask, stake)
     fold_returns = []
     fold_selections = []
-    for _, group in selected.groupby("fold", observed=True):
-        fold_summary = _selection_summary(group, stake)
+    for fold in context["fold_values"]:
+        fold_mask = mask & (context["fold"] == fold)
+        if not fold_mask.any():
+            return None
+        fold_summary = _summary_from_mask(context, fold_mask, stake)
         fold_returns.append(fold_summary["return_mid_pct"])
         fold_selections.append(fold_summary["selections"])
 
-    if len(fold_returns) < predictions["fold"].nunique():
-        return None
     if min(fold_selections) < min_fold_selections:
         return None
     if min_fold_return_mid is not None and min(fold_returns) < min_fold_return_mid:
@@ -147,10 +204,11 @@ def main() -> None:
 
     predictions = pd.read_parquet(args.predictions, engine=args.engine)
     total_races = int(predictions["race_id"].nunique())
+    fast_context = _build_fast_context(predictions)
     results = []
     for rule in _candidate_rules():
         result = _evaluate_rule(
-            predictions,
+            fast_context,
             rule,
             stake=args.stake,
             min_fold_selections=args.min_fold_selections,
