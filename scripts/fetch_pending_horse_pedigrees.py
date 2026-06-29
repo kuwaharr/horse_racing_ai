@@ -74,18 +74,19 @@ def _sleep_between_pedigree_requests() -> None:
 
 
 def main() -> None:
-    arg_parser = argparse.ArgumentParser()
-    arg_parser.add_argument("--db", type=Path, default=DB_PATH)
-    arg_parser.add_argument("--limit", type=int, default=20)
-    arg_parser.add_argument("--until-empty", action="store_true")
-    arg_parser.add_argument("--include-failed", action="store_true")
-    arg_parser.add_argument("--horse-id", default=None)
-    arg_parser.add_argument("--db-retries", type=int, default=5)
-    arg_parser.add_argument("--db-retry-sleep", type=float, default=2.0)
+    arg_parser = argparse.ArgumentParser(description="Fetch pending horse pedigrees from netkeiba into SQLite.")
+    arg_parser.add_argument("--db", type=Path, default=DB_PATH, help="SQLite DB path.")
+    arg_parser.add_argument("--limit", type=int, default=20, help="Maximum horses to fetch unless --until-empty is set.")
+    arg_parser.add_argument("--until-empty", action="store_true", help="Continue until no pending horses remain.")
+    arg_parser.add_argument("--include-failed", action="store_true", help="Retry horses currently marked failed.")
+    arg_parser.add_argument("--horse-id", default=None, help="Fetch one specific horse_id.")
+    arg_parser.add_argument("--db-retries", type=int, default=5, help="DB write retry count.")
+    arg_parser.add_argument("--db-retry-sleep", type=float, default=2.0, help="Base sleep seconds between DB write retries.")
     arg_parser.add_argument(
         "--order-by",
         choices=["updated_at", "runner_count"],
         default="updated_at",
+        help="Pending horse fetch order.",
     )
     args = arg_parser.parse_args()
     if args.until_empty and args.include_failed:

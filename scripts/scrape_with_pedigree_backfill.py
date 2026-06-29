@@ -12,7 +12,7 @@ if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
 from src.common.logger import get_logger
-from src.data.database import get_race_ids_in_db
+from src.data.database import count_race_ids_in_db
 from src.data.paths import DB_PATH
 from src.pipelines.scrape_to_db import (
     increment_page,
@@ -34,8 +34,7 @@ def _current_page_from_url(url: str) -> int:
 
 
 def _check_race_ids_in_db(db_path: Path) -> int:
-    race_ids_in_db = get_race_ids_in_db(db_path)
-    n = len(race_ids_in_db)
+    n = count_race_ids_in_db(db_path)
     logger.info("Found %s race_ids in DB", n)
     return n
 
@@ -155,18 +154,40 @@ def _process_page(url: str, page: int) -> bool:
 
 
 def main() -> None:
-    arg_parser = argparse.ArgumentParser()
-    arg_parser.add_argument("--url", required=True)
-    arg_parser.add_argument("--db", type=Path, default=DB_PATH)
-    arg_parser.add_argument("--limit-pages", type=int, default=None)
-    arg_parser.add_argument("--stop-command", default="stop")
-    arg_parser.add_argument("--pedigree-threshold", type=int, default=100)
-    arg_parser.add_argument("--pedigree-db-retries", type=int, default=5)
-    arg_parser.add_argument("--pedigree-db-retry-sleep", type=float, default=2.0)
+    arg_parser = argparse.ArgumentParser(
+        description="Scrape race list pages and run pending pedigree backfill after each page."
+    )
+    arg_parser.add_argument("--url", required=True, help="Race list URL. The page query is used as the starting page.")
+    arg_parser.add_argument("--db", type=Path, default=DB_PATH, help="SQLite DB path.")
+    arg_parser.add_argument(
+        "--limit-pages",
+        type=int,
+        default=None,
+        help="Maximum number of race list pages to process from the starting URL.",
+    )
+    arg_parser.add_argument(
+        "--stop-command",
+        default="stop",
+        help="Command accepted on stdin to stop after the current page and pedigree backfill.",
+    )
+    arg_parser.add_argument(
+        "--pedigree-threshold",
+        type=int,
+        default=100,
+        help="Run pedigree backfill when pending pedigree count is at least this value.",
+    )
+    arg_parser.add_argument("--pedigree-db-retries", type=int, default=5, help="DB write retry count for backfill.")
+    arg_parser.add_argument(
+        "--pedigree-db-retry-sleep",
+        type=float,
+        default=2.0,
+        help="Base sleep seconds between DB write retries for backfill.",
+    )
     arg_parser.add_argument(
         "--pedigree-order-by",
         choices=["updated_at", "runner_count"],
         default="runner_count",
+        help="Pending pedigree fetch order.",
     )
     args = arg_parser.parse_args()
 

@@ -69,6 +69,14 @@ def get_race_ids_in_db(db_path: Path) -> set:
         return {row[0] for row in cur.fetchall()}
 
 
+def count_race_ids_in_db(db_path: Path) -> int:
+    with sqlite3.connect(db_path, timeout=DEFAULT_SQLITE_TIMEOUT_SEC) as conn:
+        conn.execute(f"PRAGMA busy_timeout = {DEFAULT_BUSY_TIMEOUT_MS}")
+        cur = conn.cursor()
+        cur.execute("SELECT COUNT(*) FROM race")
+        return int(cur.fetchone()[0])
+
+
 def upsert_race(cur: sqlite3.Cursor, race: dict) -> None:
     cols = list(race.keys())
     set_cols = [c for c in cols if c != "race_id"]

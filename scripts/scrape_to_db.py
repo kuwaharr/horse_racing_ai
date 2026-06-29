@@ -8,12 +8,26 @@ if str(ROOT_DIR) not in sys.path:
 
 
 def main() -> None:
-    arg_parser = argparse.ArgumentParser()
-    arg_parser.add_argument("--url", default=None)
-    arg_parser.add_argument("--race-id", default=None)
-    arg_parser.add_argument("--mode", choices=["auto", "manual"], default="manual")
-    arg_parser.add_argument("--limit", type=int, default=None)
-    arg_parser.add_argument("--auto-stop-command", default="stop")
+    arg_parser = argparse.ArgumentParser(description="Scrape netkeiba race pages and upsert them into SQLite.")
+    arg_parser.add_argument("--url", default=None, help="Race list URL. Required unless --race-id is specified.")
+    arg_parser.add_argument("--race-id", default=None, help="Scrape a single race_id instead of a race list.")
+    arg_parser.add_argument(
+        "--mode",
+        choices=["auto", "manual"],
+        default="manual",
+        help="auto increments list pages; manual asks after each page.",
+    )
+    arg_parser.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Exit before scraping when DB race_id count is already at least this value.",
+    )
+    arg_parser.add_argument(
+        "--auto-stop-command",
+        default="stop",
+        help="Command accepted on stdin to stop auto mode after the current page.",
+    )
     args = arg_parser.parse_args()
 
     from src.pipelines.scrape_to_db import run, scrape_race

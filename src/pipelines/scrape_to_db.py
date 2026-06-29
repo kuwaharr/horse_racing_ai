@@ -8,8 +8,8 @@ from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 from src.common.logger import get_logger
 from src.data.database import (
+    count_race_ids_in_db,
     connect,
-    get_race_ids_in_db,
     run_write_with_retry,
     ensure_horse_table,
     upsert_horse_pending,
@@ -58,8 +58,7 @@ def increment_page(url: str) -> str:
 
 
 def check_race_ids_in_db() -> int:
-    race_ids_in_db = get_race_ids_in_db(DB_PATH)
-    n = len(race_ids_in_db)
+    n = count_race_ids_in_db(DB_PATH)
     logger.info("Found %s race_ids in DB", n)
     return n
 
