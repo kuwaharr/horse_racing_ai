@@ -23,42 +23,58 @@ PEDIGREE_HISTORY_FEATURE_COLUMNS = [
     "sire_past_starts",
     "sire_past_top3",
     "sire_past_top3_rate",
+    "sire_past_top3_rate_smooth",
     "sire_past_avg_finish",
     "sire_track_past_starts",
     "sire_track_past_top3",
     "sire_track_past_top3_rate",
+    "sire_track_past_top3_rate_smooth",
     "sire_surface_past_starts",
     "sire_surface_past_top3",
     "sire_surface_past_top3_rate",
+    "sire_surface_past_top3_rate_smooth",
     "sire_distance_band_past_starts",
     "sire_distance_band_past_top3",
     "sire_distance_band_past_top3_rate",
+    "sire_distance_band_past_top3_rate_smooth",
     "dam_past_starts",
     "dam_past_top3",
     "dam_past_top3_rate",
+    "dam_past_top3_rate_smooth",
     "dam_past_avg_finish",
     "broodmare_sire_past_starts",
     "broodmare_sire_past_top3",
     "broodmare_sire_past_top3_rate",
+    "broodmare_sire_past_top3_rate_smooth",
     "broodmare_sire_past_avg_finish",
     "broodmare_sire_track_past_starts",
     "broodmare_sire_track_past_top3",
     "broodmare_sire_track_past_top3_rate",
+    "broodmare_sire_track_past_top3_rate_smooth",
     "broodmare_sire_surface_past_starts",
     "broodmare_sire_surface_past_top3",
     "broodmare_sire_surface_past_top3_rate",
+    "broodmare_sire_surface_past_top3_rate_smooth",
     "broodmare_sire_distance_band_past_starts",
     "broodmare_sire_distance_band_past_top3",
     "broodmare_sire_distance_band_past_top3_rate",
+    "broodmare_sire_distance_band_past_top3_rate_smooth",
     "race_sire_past_top3_rate_rank",
     "race_sire_past_top3_rate_diff",
+    "race_sire_past_top3_rate_smooth_rank",
+    "race_sire_past_top3_rate_smooth_diff",
     "race_sire_past_avg_finish_rank",
     "race_sire_past_avg_finish_diff",
     "race_broodmare_sire_past_top3_rate_rank",
     "race_broodmare_sire_past_top3_rate_diff",
+    "race_broodmare_sire_past_top3_rate_smooth_rank",
+    "race_broodmare_sire_past_top3_rate_smooth_diff",
     "race_broodmare_sire_past_avg_finish_rank",
     "race_broodmare_sire_past_avg_finish_diff",
 ]
+
+
+PEDIGREE_SMOOTHING_WEIGHT = 20.0
 
 
 EVAL_ODDS_COLUMNS = [
@@ -444,6 +460,7 @@ def _append_history_features(df):
         name: defaultdict(_empty_entity_stat)
         for name, _ in entity_specs + pedigree_entity_specs
     }
+    prior_top3_stats = _empty_history_stat()
     horse_track_stats = defaultdict(_empty_history_stat)
     horse_surface_stats = defaultdict(_empty_history_stat)
     horse_distance_band_stats = defaultdict(_empty_history_stat)
@@ -486,6 +503,12 @@ def _append_history_features(df):
                 history_row[f"{name}_past_starts"] = starts
                 history_row[f"{name}_past_top3"] = top3
                 history_row[f"{name}_past_top3_rate"] = None if starts == 0 else top3 / starts
+                history_row[f"{name}_past_top3_rate_smooth"] = _smoothed_top3_rate(
+                    starts,
+                    top3,
+                    prior_top3_stats["starts"],
+                    prior_top3_stats["top3"],
+                )
                 history_row[f"{name}_past_avg_finish"] = None if starts == 0 else finish_sum / starts
                 recent = recent_history[name][value]
                 if name == "horse":
@@ -563,6 +586,12 @@ def _append_history_features(df):
                 history_row[f"{name}_past_starts"] = starts
                 history_row[f"{name}_past_top3"] = top3
                 history_row[f"{name}_past_top3_rate"] = None if starts == 0 else top3 / starts
+                history_row[f"{name}_past_top3_rate_smooth"] = _smoothed_top3_rate(
+                    starts,
+                    top3,
+                    prior_top3_stats["starts"],
+                    prior_top3_stats["top3"],
+                )
                 history_row[f"{name}_past_avg_finish"] = None if starts == 0 else finish_sum / starts
             for feature_name, item in [
                 ("horse_track", horse_track_stats[(row["horse_id"], row["track_id"])]),
@@ -629,11 +658,19 @@ def _append_history_features(df):
                 history_row[f"{feature_name}_past_starts"] = starts
                 history_row[f"{feature_name}_past_top3"] = top3
                 history_row[f"{feature_name}_past_top3_rate"] = None if starts == 0 else top3 / starts
+                history_row[f"{feature_name}_past_top3_rate_smooth"] = _smoothed_top3_rate(
+                    starts,
+                    top3,
+                    prior_top3_stats["starts"],
+                    prior_top3_stats["top3"],
+                )
             history_rows.append(history_row)
 
         for _, row in day_df.iterrows():
             target = int(row["target_top3"])
             finish = float(row["finish_position"])
+            prior_top3_stats["starts"] += 1
+            prior_top3_stats["top3"] += target
             course_key = (row["track_id"], row["surface_id"], row["distance_band"])
             for name, id_col in entity_specs:
                 item = stats[name][row[id_col]]
@@ -798,6 +835,19 @@ def _recent_avg_value(rows: list[dict], key: str, n: int) -> float | None:
     return sum(values) / len(values)
 
 
+def _smoothed_top3_rate(
+    starts: int,
+    top3: int,
+    prior_starts: int,
+    prior_top3: int,
+    prior_weight: float = PEDIGREE_SMOOTHING_WEIGHT,
+) -> float | None:
+    if prior_starts == 0:
+        return None if starts == 0 else top3 / starts
+    prior_rate = prior_top3 / prior_starts
+    return (top3 + prior_rate * prior_weight) / (starts + prior_weight)
+
+
 def _valid_float(value) -> float | None:
     if value is None:
         return None
@@ -890,8 +940,10 @@ def _append_race_relative_features(df):
         ("jockey_trainer_past_top3_rate", False),
         ("horse_trainer_past_top3_rate", False),
         ("sire_past_top3_rate", False),
+        ("sire_past_top3_rate_smooth", False),
         ("sire_past_avg_finish", True),
         ("broodmare_sire_past_top3_rate", False),
+        ("broodmare_sire_past_top3_rate_smooth", False),
         ("broodmare_sire_past_avg_finish", True),
         ("gate", True),
         ("horse_number", True),
