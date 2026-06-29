@@ -62,10 +62,13 @@ def _candidate_rules(profile: str = "place", include_rank_ev_filters: bool = Fal
             (1.0, 2.0),
             (1.0, 2.5),
             (1.0, 3.0),
+            (1.0, 3.5),
             (1.0, 4.0),
             (1.0, 5.0),
             (1.2, 3.0),
+            (1.2, 3.5),
             (1.5, 3.0),
+            (1.5, 3.5),
             (1.5, 5.0),
             (2.0, 5.0),
             (2.0, 8.0),
@@ -75,6 +78,7 @@ def _candidate_rules(profile: str = "place", include_rank_ev_filters: bool = Fal
             (None, None),
             (1200, None),
             (1400, None),
+            (1600, None),
             (1600, 2200),
             (1800, 2200),
         ]
@@ -92,8 +96,11 @@ def _candidate_rules(profile: str = "place", include_rank_ev_filters: bool = Fal
     rank_filters = [None]
     ev_mid_filters = [None]
     if include_rank_ev_filters:
-        rank_filters = [None, 4, 5, 6, 8]
-        ev_mid_filters = [None, 1.2, 1.3, 1.4]
+        if profile == "win":
+            rank_filters = [None, 1, 2, 3, 4, 5, 6, 8]
+        else:
+            rank_filters = [None, 4, 5, 6, 8]
+            ev_mid_filters = [None, 1.2, 1.3, 1.4]
 
     candidates = []
     for pred_min in pred_thresholds:

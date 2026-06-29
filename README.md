@@ -236,10 +236,16 @@ python scripts\build_place_top3_dataset.py --kind win-eval-odds --engine fastpar
 
 ```powershell
 python scripts\generate_catboost_predictions.py --engine fastparquet --training-dataset "D:\horse_racing_ai\data\feature\win_top1_dataset.parquet" --odds-dataset "D:\horse_racing_ai\data\feature\win_top1_eval_odds.parquet" --output "D:\horse_racing_ai\data\model\catboost_win_top1_predictions.parquet"
-python scripts\search_rules_from_predictions.py --engine fastparquet --profile win --predictions "D:\horse_racing_ai\data\model\catboost_win_top1_predictions.parquet" --min-buy-rate 18 --max-buy-rate 22 --min-selections 70
+python scripts\search_rules_from_predictions.py --engine fastparquet --profile win --predictions "D:\horse_racing_ai\data\model\catboost_win_top1_predictions.parquet" --min-buy-rate 20 --min-selections 70 --include-rank-ev-filters
 ```
 
-現時点の単勝20%前後探索では、最高候補でも回収率は90%未満です。複勝の現行候補より弱いため、単勝は追加改善の余地確認用とします。
+現時点の単勝20%以上探索では、最高候補でも回収率は90%未満です。最新の改善候補は、`pred_top3>=0.15`、単勝オッズ`[1.2,3.5)`、距離`1600m以上`、開催場`4,5,6,8,9`、芝、同一レース内の予測順位`3位以内`です。walk-forward 4 foldで562レース、712点、276的中、的中率38.76%、購入率20.53%、単勝回収率88.30%でした。従来の購入率20%以上候補は、`pred_top3>=0.12`、単勝オッズ`[1.0,4.0)`、距離`1400m以上`、開催場`4,5,6,9`、芝で601レース、859点、300的中、的中率34.92%、購入率21.95%、単勝回収率86.00%でした。
+
+改善候補を固定評価する場合:
+
+```powershell
+python scripts\evaluate_fixed_rule_from_predictions.py --engine fastparquet --predictions "D:\horse_racing_ai\data\model\catboost_win_top1_predictions.parquet" --pred-min 0.15 --odds-min 1.2 --odds-max 3.5 --distance-min 1600 --distance-max none --include-track-ids "4,5,6,8,9" --surface-id 0 --pred-rank-max 3
+```
 
 血統特徴量あり/なしを比較し、購入率20%前後の合議ルール候補を探す場合:
 
