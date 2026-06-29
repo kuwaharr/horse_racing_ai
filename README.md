@@ -232,6 +232,15 @@ python scripts\build_place_top3_dataset.py --kind win-eval-odds --engine fastpar
 
 単勝互換データは、既存モデルコードを再利用するため内部列名として`target_top3`と`place_odds_min`/`place_odds_max`を使います。中身はそれぞれ「1着かどうか」と単勝オッズです。
 
+単勝互換データでCatBoost予測を作成し、単勝向けの低確率・低オッズ帯を探索する場合:
+
+```powershell
+python scripts\generate_catboost_predictions.py --engine fastparquet --training-dataset "D:\horse_racing_ai\data\feature\win_top1_dataset.parquet" --odds-dataset "D:\horse_racing_ai\data\feature\win_top1_eval_odds.parquet" --output "D:\horse_racing_ai\data\model\catboost_win_top1_predictions.parquet"
+python scripts\search_rules_from_predictions.py --engine fastparquet --profile win --predictions "D:\horse_racing_ai\data\model\catboost_win_top1_predictions.parquet" --min-buy-rate 18 --max-buy-rate 22 --min-selections 70
+```
+
+現時点の単勝20%前後探索では、最高候補でも回収率は90%未満です。複勝の現行候補より弱いため、単勝は追加改善の余地確認用とします。
+
 血統特徴量あり/なしを比較し、購入率20%前後の合議ルール候補を探す場合:
 
 ```powershell

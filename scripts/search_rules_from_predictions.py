@@ -17,29 +17,69 @@ def _format_pct(value: float | None) -> str:
     return "n/a" if value is None else f"{value:.2f}%"
 
 
-def _candidate_rules() -> list[dict]:
-    pred_thresholds = [0.30, 0.32, 0.34, 0.35, 0.36, 0.38, 0.40, 0.45, 0.50]
-    odds_ranges = [
-        (2.0, 3.0),
-        (2.5, 5.0),
-        (2.5, 6.0),
-        (3.0, 4.0),
-        (3.0, 5.0),
-        (3.0, 6.0),
-        (3.2, 5.8),
-        (3.2, 6.0),
-        (4.0, 5.0),
-        (5.0, 10.0),
-    ]
-    distance_ranges = [
-        (None, None),
-        (1200, None),
-        (1400, 1800),
-        (1400, None),
-        (1600, 2200),
-        (1800, 2200),
-        (2200, None),
-    ]
+def _candidate_rules(profile: str = "place") -> list[dict]:
+    if profile == "place":
+        pred_thresholds = [0.30, 0.32, 0.34, 0.35, 0.36, 0.38, 0.40, 0.45, 0.50]
+        odds_ranges = [
+            (2.0, 3.0),
+            (2.5, 5.0),
+            (2.5, 6.0),
+            (3.0, 4.0),
+            (3.0, 5.0),
+            (3.0, 6.0),
+            (3.2, 5.8),
+            (3.2, 6.0),
+            (4.0, 5.0),
+            (5.0, 10.0),
+        ]
+        distance_ranges = [
+            (None, None),
+            (1200, None),
+            (1400, 1800),
+            (1400, None),
+            (1600, 2200),
+            (1800, 2200),
+            (2200, None),
+        ]
+    elif profile == "win":
+        pred_thresholds = [
+            0.04,
+            0.05,
+            0.06,
+            0.08,
+            0.10,
+            0.12,
+            0.14,
+            0.15,
+            0.16,
+            0.17,
+            0.18,
+            0.20,
+            0.22,
+            0.25,
+        ]
+        odds_ranges = [
+            (1.0, 2.0),
+            (1.0, 2.5),
+            (1.0, 3.0),
+            (1.0, 4.0),
+            (1.0, 5.0),
+            (1.2, 3.0),
+            (1.5, 3.0),
+            (1.5, 5.0),
+            (2.0, 5.0),
+            (2.0, 8.0),
+            (3.0, 10.0),
+        ]
+        distance_ranges = [
+            (None, None),
+            (1200, None),
+            (1400, None),
+            (1600, 2200),
+            (1800, 2200),
+        ]
+    else:
+        raise ValueError(f"Unknown rule search profile: {profile}")
     track_filters = [
         ("all", None, None),
         ("exclude_7_10", None, [7, 10]),
@@ -194,6 +234,7 @@ def main() -> None:
     arg_parser.add_argument("--min-fold-return-mid", type=float, default=None)
     arg_parser.add_argument("--min-buy-rate", type=float, default=None)
     arg_parser.add_argument("--max-buy-rate", type=float, default=None)
+    arg_parser.add_argument("--profile", choices=["place", "win"], default="place")
     arg_parser.add_argument("--top-n", type=int, default=20)
     args = arg_parser.parse_args()
 
@@ -206,7 +247,7 @@ def main() -> None:
     total_races = int(predictions["race_id"].nunique())
     fast_context = _build_fast_context(predictions)
     results = []
-    for rule in _candidate_rules():
+    for rule in _candidate_rules(args.profile):
         result = _evaluate_rule(
             fast_context,
             rule,
@@ -241,6 +282,7 @@ def main() -> None:
     print(f"Min fold return mid: {args.min_fold_return_mid}")
     print(f"Min buy rate: {args.min_buy_rate}")
     print(f"Max buy rate: {args.max_buy_rate}")
+    print(f"Profile: {args.profile}")
     print("")
     print(
         "rule_key                                                        races  buy_rate  selections  "
