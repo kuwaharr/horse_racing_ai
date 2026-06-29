@@ -7,6 +7,8 @@ from pathlib import Path
 
 DEFAULT_TRAINING_DATASET_NAME = "place_top3_dataset.parquet"
 DEFAULT_EVAL_ODDS_DATASET_NAME = "place_top3_eval_odds.parquet"
+DEFAULT_WIN_COMPAT_TRAINING_DATASET_NAME = "win_top1_dataset.parquet"
+DEFAULT_WIN_COMPAT_EVAL_ODDS_DATASET_NAME = "win_top1_eval_odds.parquet"
 
 
 PEDIGREE_FEATURE_COLUMNS = [
@@ -385,6 +387,7 @@ SELECT
     ru.horse_weight,
     ru.horse_weight_diff,
     ru.finish AS finish_position,
+    wo.odds AS win_odds,
     po.odds_min AS place_odds_min,
     po.odds_max AS place_odds_max,
     CASE WHEN ru.finish <= 3 THEN 1 ELSE 0 END AS target_top3
@@ -394,6 +397,9 @@ INNER JOIN race ra
 LEFT JOIN place_odds po
     ON po.race_id = ru.race_id
     AND po.horse_number = ru.horse_number
+LEFT JOIN win_odds wo
+    ON wo.race_id = ru.race_id
+    AND wo.horse_number = ru.horse_number
 LEFT JOIN horse ho
     ON ho.horse_id = ru.horse_id
 WHERE ru.status_id = 0
@@ -408,6 +414,14 @@ def default_training_dataset_name() -> str:
 
 def default_eval_odds_dataset_name() -> str:
     return DEFAULT_EVAL_ODDS_DATASET_NAME
+
+
+def default_win_compat_training_dataset_name() -> str:
+    return DEFAULT_WIN_COMPAT_TRAINING_DATASET_NAME
+
+
+def default_win_compat_eval_odds_dataset_name() -> str:
+    return DEFAULT_WIN_COMPAT_EVAL_ODDS_DATASET_NAME
 
 
 def _append_history_features(df):
@@ -962,6 +976,93 @@ def build_place_top3_eval_odds_dataset(
     with sqlite3.connect(db_path) as conn:
         df = pd.read_sql_query(PLACE_TOP3_BASE_QUERY, conn)
 
+    df = df[EVAL_ODDS_COLUMNS]
+
+    try:
+        df.to_parquet(output_path, index=False, engine=engine)
+    except ImportError as e:
+        raise RuntimeError(
+            "Parquet出力エンジンが見つかりません。"
+            " PowerShellで `pip install pyarrow` を実行するか、"
+            " `--engine fastparquet` を指定してください。"
+        ) from e
+
+    return len(df)
+
+
+def build_win_top1_compat_dataset(
+    db_path: Path,
+    output_path: Path,
+    engine: str = "auto",
+    history_features: bool = True,
+    pedigree_features: bool = True,
+) -> int:
+    try:
+        import pandas as pd
+    except ModuleNotFoundError as e:
+        raise RuntimeError(
+            "Parquet出力には pandas と pyarrow または fastparquet が必要です。"
+            " PowerShellで `pip install pandas pyarrow` を実行してください。"
+        ) from e
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    with sqlite3.connect(db_path) as conn:
+        df = pd.read_sql_query(PLACE_TOP3_BASE_QUERY, conn)
+
+    if history_features:
+        df = _append_history_features(df)
+
+    df["target_top3"] = (df["finish_position"] == 1).astype(int)
+
+    columns = TRAINING_FEATURE_COLUMNS
+    if pedigree_features:
+        horse_name_index = columns.index("horse_name")
+        columns = (
+            columns[: horse_name_index + 1]
+            + PEDIGREE_FEATURE_COLUMNS
+            + columns[horse_name_index + 1 :]
+        )
+    if history_features:
+        history_columns = HISTORY_FEATURE_COLUMNS
+        if pedigree_features:
+            history_columns = history_columns + PEDIGREE_HISTORY_FEATURE_COLUMNS
+        columns = columns[:-1] + history_columns + columns[-1:]
+    df = df[columns]
+
+    try:
+        df.to_parquet(output_path, index=False, engine=engine)
+    except ImportError as e:
+        raise RuntimeError(
+            "Parquet出力エンジンが見つかりません。"
+            " PowerShellで `pip install pyarrow` を実行するか、"
+            " `--engine fastparquet` を指定してください。"
+        ) from e
+
+    return len(df)
+
+
+def build_win_top1_compat_eval_odds_dataset(
+    db_path: Path,
+    output_path: Path,
+    engine: str = "auto",
+) -> int:
+    try:
+        import pandas as pd
+    except ModuleNotFoundError as e:
+        raise RuntimeError(
+            "Parquet出力には pandas と pyarrow または fastparquet が必要です。"
+            " PowerShellで `pip install pandas pyarrow` を実行してください。"
+        ) from e
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    with sqlite3.connect(db_path) as conn:
+        df = pd.read_sql_query(PLACE_TOP3_BASE_QUERY, conn)
+
+    df["target_top3"] = (df["finish_position"] == 1).astype(int)
+    df["place_odds_min"] = df["win_odds"]
+    df["place_odds_max"] = df["win_odds"]
     df = df[EVAL_ODDS_COLUMNS]
 
     try:

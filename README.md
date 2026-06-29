@@ -223,6 +223,15 @@ python scripts\build_place_top3_dataset.py --kind training --engine fastparquet
 python scripts\build_place_top3_dataset.py --kind eval-odds --engine fastparquet
 ```
 
+単勝1着予測を既存のCatBoost/探索パイプラインで扱う互換Parquetを作成する場合:
+
+```powershell
+python scripts\build_place_top3_dataset.py --kind win-training --engine fastparquet
+python scripts\build_place_top3_dataset.py --kind win-eval-odds --engine fastparquet
+```
+
+単勝互換データは、既存モデルコードを再利用するため内部列名として`target_top3`と`place_odds_min`/`place_odds_max`を使います。中身はそれぞれ「1着かどうか」と単勝オッズです。
+
 血統特徴量あり/なしを比較し、購入率20%前後の合議ルール候補を探す場合:
 
 ```powershell
