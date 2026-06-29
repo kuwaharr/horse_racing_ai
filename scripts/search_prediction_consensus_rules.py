@@ -19,13 +19,15 @@ def _format_pct(value: float | None) -> str:
 
 
 def _candidate_rules(modes: list[str]) -> list[dict[str, Any]]:
-    pred_thresholds = [0.30, 0.32, 0.35, 0.38, 0.40, 0.45, 0.50]
+    pred_thresholds = [0.30, 0.32, 0.34, 0.35, 0.36, 0.38, 0.40, 0.45, 0.50]
     avg_thresholds = [0.35, 0.375, 0.40, 0.425, 0.45, 0.475, 0.50]
     odds_ranges = [
         (2.5, 5.0),
         (2.5, 6.0),
         (3.0, 5.0),
         (3.0, 6.0),
+        (3.2, 5.8),
+        (3.2, 6.0),
         (4.0, 6.0),
     ]
     distance_ranges = [
