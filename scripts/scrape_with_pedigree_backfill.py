@@ -122,7 +122,7 @@ def _process_page(url: str, page: int) -> bool:
     r_soup = make_soup(url)
     sleep_between_requests()
     if not r_soup.success:
-        logger.error("page=%s make_soup failed %s", page, r_soup.error)
+        logger.error("make_soup failed %s", r_soup.error)
         sleep_backoff()
         return False
 
@@ -131,11 +131,11 @@ def _process_page(url: str, page: int) -> bool:
         logger.info("Scraped all pages")
         return False
 
-    logger.info("page=%s Found %s race_ids in race list page", page, len(race_ids))
+    logger.info("Page %s found %s race_ids in race list page", page, len(race_ids))
     for i, race_id in enumerate(race_ids, start=1):
-        logger.info("page=%s %s/%s race_id=%s Processing", page, i, len(race_ids), race_id)
+        logger.info("%s/%s race_id=%s Processing", i, len(race_ids), race_id)
         scrape_race(race_id)
-    logger.info("page=%s Done", page)
+    logger.info("Page %s done", page)
     return True
 
 
@@ -178,7 +178,7 @@ def main() -> None:
         stop_requested = _consume_stop_command(commands, args.stop_command)
         _maybe_run_pedigree_backfill(args)
         if stop_requested:
-            logger.info("Stopped after page=%s and pedigree backfill", page)
+            logger.info("Stopped after page %s and pedigree backfill", page)
             break
 
         url = increment_page(url)
