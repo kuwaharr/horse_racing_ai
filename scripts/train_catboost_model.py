@@ -7,7 +7,7 @@ ROOT_DIR = Path(__file__).resolve().parents[1]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
-from src.data.paths import FEAT_DIR, MODEL_DIR
+from src.data.paths import FEAT_DIR
 from src.features.place_top3 import default_training_dataset_name, default_win_compat_training_dataset_name
 from src.models.place_top3_catboost import (
     DEFAULT_CATBOOST_PARAMS,
@@ -19,10 +19,11 @@ from src.models.place_top3_catboost import (
 from src.models.place_top3_lgbm import _read_parquet
 
 
-DEFAULT_PLACE_MODEL = MODEL_DIR / "catboost_place_top3_model.cbm"
-DEFAULT_PLACE_METADATA = MODEL_DIR / "catboost_place_top3_model_metadata.json"
-DEFAULT_WIN_MODEL = MODEL_DIR / "catboost_win_top1_model.cbm"
-DEFAULT_WIN_METADATA = MODEL_DIR / "catboost_win_top1_model_metadata.json"
+LOCAL_MODEL_DIR = ROOT_DIR / "local_models"
+DEFAULT_PLACE_MODEL = LOCAL_MODEL_DIR / "catboost_place_top3_model.cbm"
+DEFAULT_PLACE_METADATA = LOCAL_MODEL_DIR / "catboost_place_top3_model_metadata.json"
+DEFAULT_WIN_MODEL = LOCAL_MODEL_DIR / "catboost_win_top1_model.cbm"
+DEFAULT_WIN_METADATA = LOCAL_MODEL_DIR / "catboost_win_top1_model_metadata.json"
 
 
 def _optional_str_list(value: str) -> list[str] | None:

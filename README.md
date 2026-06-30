@@ -385,10 +385,12 @@ python scripts\train_catboost_model.py --profile win --engine fastparquet
 
 デフォルトでは次のファイルへ出力します。
 
-- `D:\horse_racing_ai\data\model\catboost_place_top3_model.cbm`
-- `D:\horse_racing_ai\data\model\catboost_place_top3_model_metadata.json`
-- `D:\horse_racing_ai\data\model\catboost_win_top1_model.cbm`
-- `D:\horse_racing_ai\data\model\catboost_win_top1_model_metadata.json`
+- `local_models\catboost_place_top3_model.cbm`
+- `local_models\catboost_place_top3_model_metadata.json`
+- `local_models\catboost_win_top1_model.cbm`
+- `local_models\catboost_win_top1_model_metadata.json`
+
+`local_models\`はgit追跡対象外です。
 
 出走表ページから当日以降のレースを予測する場合:
 
@@ -398,7 +400,31 @@ python scripts\predict_upcoming_races.py --profile place --date 2026-07-04
 python scripts\predict_upcoming_races.py --profile win --date 2026-07-04
 ```
 
-`--date`はnetkeibaの開催一覧`https://race.netkeiba.com/top/race_list.html?kaisai_date=YYYYMMDD`から中央競馬の`race_id`を抽出します。予測CSVはデフォルトで`D:\horse_racing_ai\data\model\live_predictions.csv`へ出力し、端末には現在の固定ルールに合う買い候補だけを表示します。発走前オッズを先に`collect_pre_race_odds.py`で保存していれば、最新スナップショットの単勝または複勝オッズを使って買い候補を絞ります。
+`--date`はnetkeibaの開催一覧`https://race.netkeiba.com/top/race_list.html?kaisai_date=YYYYMMDD`から中央競馬の`race_id`を抽出します。予測CSVはデフォルトで`local_models\live_predictions.csv`へ出力し、端末には現在の固定ルールに合う買い候補だけを表示します。発走前オッズを先に`collect_pre_race_odds.py`で保存していれば、最新スナップショットの単勝または複勝オッズを使って買い候補を絞ります。
+
+買い候補ルールはJSONでまとめて指定できます。JSONに書けるキーは`pred_min`、`odds_min`、`odds_max`、`distance_min`、`distance_max`、`include_track_ids`、`exclude_track_ids`、`surface_id`、`pred_rank_max`、`ev_mid_min`です。
+
+```json
+{
+  "pred_min": 0.34,
+  "odds_min": 3.2,
+  "odds_max": 6.0,
+  "distance_min": 1200,
+  "exclude_track_ids": [3, 7, 10],
+  "pred_rank_max": 5,
+  "ev_mid_min": 1.4
+}
+```
+
+```powershell
+python scripts\predict_upcoming_races.py --profile place --date 2026-07-04 --rule-json local_models\place_rule.json
+```
+
+一部だけ変える場合は個別オプションでも指定できます。
+
+```powershell
+python scripts\predict_upcoming_races.py --profile place --date 2026-07-04 --rule-pred-min 0.36 --rule-odds-min 3.0 --rule-exclude-track-ids "3,7,10"
+```
 
 特徴量グループを除外した予測キャッシュを作る場合:
 

@@ -10,7 +10,7 @@ if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
 from src.common.maps import SEX_MAP, STABLE_MAP
-from src.data.paths import DB_PATH, MODEL_DIR
+from src.data.paths import DB_PATH
 from src.features.place_top3 import (
     HISTORY_FEATURE_COLUMNS,
     PEDIGREE_FEATURE_COLUMNS,
@@ -23,11 +23,12 @@ from src.scrape.extracters import extract_race_ids, parse_url
 from src.scrape.fetchers import make_soup
 
 
-DEFAULT_PLACE_MODEL = MODEL_DIR / "catboost_place_top3_model.cbm"
-DEFAULT_PLACE_METADATA = MODEL_DIR / "catboost_place_top3_model_metadata.json"
-DEFAULT_WIN_MODEL = MODEL_DIR / "catboost_win_top1_model.cbm"
-DEFAULT_WIN_METADATA = MODEL_DIR / "catboost_win_top1_model_metadata.json"
-DEFAULT_OUTPUT = MODEL_DIR / "live_predictions.csv"
+LOCAL_MODEL_DIR = ROOT_DIR / "local_models"
+DEFAULT_PLACE_MODEL = LOCAL_MODEL_DIR / "catboost_place_top3_model.cbm"
+DEFAULT_PLACE_METADATA = LOCAL_MODEL_DIR / "catboost_place_top3_model_metadata.json"
+DEFAULT_WIN_MODEL = LOCAL_MODEL_DIR / "catboost_win_top1_model.cbm"
+DEFAULT_WIN_METADATA = LOCAL_MODEL_DIR / "catboost_win_top1_model_metadata.json"
+DEFAULT_OUTPUT = LOCAL_MODEL_DIR / "live_predictions.csv"
 OUTPUT_COLUMNS = [
     "race_id",
     "date",
@@ -73,6 +74,19 @@ WIN_RULE = {
     "include_track_ids": [4, 5, 6, 8, 9],
     "surface_id": 0,
     "pred_rank_max": 3,
+}
+
+RULE_KEYS = {
+    "pred_min",
+    "odds_min",
+    "odds_max",
+    "distance_min",
+    "distance_max",
+    "include_track_ids",
+    "exclude_track_ids",
+    "surface_id",
+    "pred_rank_max",
+    "ev_mid_min",
 }
 
 
@@ -457,8 +471,37 @@ def prepare_model_input(features, metadata: dict):
     return x
 
 
-def apply_buy_rule(predictions, profile: str):
-    rule = WIN_RULE if profile == "win" else PLACE_RULE
+def _optional_float(value: str) -> float | None:
+    if value.lower() in {"none", "null", ""}:
+        return None
+    return float(value)
+
+
+def _optional_int(value: str) -> int | None:
+    if value.lower() in {"none", "null", ""}:
+        return None
+    return int(value)
+
+
+def _optional_int_list(value: str) -> list[int] | None:
+    if value.lower() in {"none", "null", ""}:
+        return None
+    return [int(part.strip()) for part in value.split(",") if part.strip()]
+
+
+def load_buy_rule(profile: str, rule_json: Path | None, overrides: dict) -> dict:
+    rule = dict(WIN_RULE if profile == "win" else PLACE_RULE)
+    if rule_json is not None:
+        loaded = json.loads(rule_json.read_text(encoding="utf-8"))
+        unknown = sorted(set(loaded) - RULE_KEYS)
+        if unknown:
+            raise RuntimeError(f"Unknown rule keys in {rule_json}: {unknown}")
+        rule.update(loaded)
+    rule.update({key: value for key, value in overrides.items() if value is not None})
+    return rule
+
+
+def apply_buy_rule(predictions, rule: dict):
     selected = predictions.copy()
     selected["pred_rank"] = selected.groupby("race_id")["pred"].rank(method="first", ascending=False)
     if "odds_mid" in selected.columns:
@@ -506,6 +549,17 @@ def main() -> None:
     parser.add_argument("--model", type=Path, default=None)
     parser.add_argument("--metadata", type=Path, default=None)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument("--rule-json", type=Path, default=None)
+    parser.add_argument("--rule-pred-min", type=_optional_float, default=None)
+    parser.add_argument("--rule-odds-min", type=_optional_float, default=None)
+    parser.add_argument("--rule-odds-max", type=_optional_float, default=None)
+    parser.add_argument("--rule-distance-min", type=_optional_int, default=None)
+    parser.add_argument("--rule-distance-max", type=_optional_int, default=None)
+    parser.add_argument("--rule-include-track-ids", type=_optional_int_list, default=None)
+    parser.add_argument("--rule-exclude-track-ids", type=_optional_int_list, default=None)
+    parser.add_argument("--rule-surface-id", type=_optional_int, default=None)
+    parser.add_argument("--rule-pred-rank-max", type=_optional_int, default=None)
+    parser.add_argument("--rule-ev-mid-min", type=_optional_float, default=None)
     args = parser.parse_args()
     if not args.race_id and args.date is None:
         parser.error("--race-id or --date is required")
@@ -527,6 +581,22 @@ def main() -> None:
     metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
     if metadata.get("profile") != args.profile:
         raise RuntimeError(f"Model metadata profile mismatch: {metadata.get('profile')} != {args.profile}")
+    buy_rule = load_buy_rule(
+        args.profile,
+        args.rule_json,
+        {
+            "pred_min": args.rule_pred_min,
+            "odds_min": args.rule_odds_min,
+            "odds_max": args.rule_odds_max,
+            "distance_min": args.rule_distance_min,
+            "distance_max": args.rule_distance_max,
+            "include_track_ids": args.rule_include_track_ids,
+            "exclude_track_ids": args.rule_exclude_track_ids,
+            "surface_id": args.rule_surface_id,
+            "pred_rank_max": args.rule_pred_rank_max,
+            "ev_mid_min": args.rule_ev_mid_min,
+        },
+    )
 
     live_rows = fetch_live_base_rows(race_ids, args.db)
     if not live_rows:
@@ -542,7 +612,7 @@ def main() -> None:
     all_predictions["pred_rank"] = all_predictions.groupby("race_id")["pred"].rank(method="first", ascending=False)
     all_predictions["ev_mid"] = all_predictions["pred"] * all_predictions["odds_mid"]
     all_predictions = all_predictions.sort_values(["race_id", "pred"], ascending=[True, False])
-    buys = apply_buy_rule(all_predictions, args.profile)
+    buys = apply_buy_rule(all_predictions, buy_rule)
     output_cols = [col for col in OUTPUT_COLUMNS if col in all_predictions.columns]
     args.output.parent.mkdir(parents=True, exist_ok=True)
     all_predictions[output_cols].to_csv(args.output, index=False, encoding="utf-8-sig")
