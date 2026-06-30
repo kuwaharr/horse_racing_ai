@@ -376,6 +376,30 @@ python scripts\evaluate_fixed_rule_from_predictions.py --engine fastparquet --pr
 python scripts\evaluate_fixed_rule_from_predictions.py --engine fastparquet --pred-min 0.34 --odds-min 3.2 --odds-max 6.0 --distance-min 1200 --distance-max none --exclude-track-ids "3,7,10" --pred-rank-max 5 --ev-mid-min 1.4
 ```
 
+本番予測用にCatBoostモデルを保存する場合。以後の予測実行ではこの保存済みモデルを読み込むため、毎回学習し直しません。
+
+```powershell
+python scripts\train_catboost_model.py --profile place --engine fastparquet
+python scripts\train_catboost_model.py --profile win --engine fastparquet
+```
+
+デフォルトでは次のファイルへ出力します。
+
+- `D:\horse_racing_ai\data\model\catboost_place_top3_model.cbm`
+- `D:\horse_racing_ai\data\model\catboost_place_top3_model_metadata.json`
+- `D:\horse_racing_ai\data\model\catboost_win_top1_model.cbm`
+- `D:\horse_racing_ai\data\model\catboost_win_top1_model_metadata.json`
+
+出走表ページから当日以降のレースを予測する場合:
+
+```powershell
+python scripts\predict_upcoming_races.py --profile place --race-id 202605030101
+python scripts\predict_upcoming_races.py --profile place --date 2026-07-04
+python scripts\predict_upcoming_races.py --profile win --date 2026-07-04
+```
+
+`--date`はnetkeibaの開催一覧`https://race.netkeiba.com/top/race_list.html?kaisai_date=YYYYMMDD`から中央競馬の`race_id`を抽出します。予測CSVはデフォルトで`D:\horse_racing_ai\data\model\live_predictions.csv`へ出力し、端末には現在の固定ルールに合う買い候補だけを表示します。発走前オッズを先に`collect_pre_race_odds.py`で保存していれば、最新スナップショットの単勝または複勝オッズを使って買い候補を絞ります。
+
 特徴量グループを除外した予測キャッシュを作る場合:
 
 ```powershell
