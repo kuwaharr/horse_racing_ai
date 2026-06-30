@@ -146,6 +146,17 @@ DB内のレース数が指定値以上になったら開始せず終了する場
 python scripts\scrape_to_db.py --url "<netkeibaのレース一覧URL>" --limit 1000
 ```
 
+発走前オッズのスナップショットを取得する場合:
+
+```powershell
+python scripts\collect_pre_race_odds.py --sweep --date 2026-07-04
+python scripts\collect_pre_race_odds.py --sweep --weekend
+python scripts\collect_pre_race_odds.py --watch --weekend
+```
+
+対象は中央競馬の単勝・複勝・ワイド・3連複です。`--sweep`はその時点で取得できる対象レースのオッズを一括取得します。`--watch`は常駐し、各レースの発走時刻に対して`over_120`、`pre_60_120`、`pre_30_60`、`pre_15_30`、`pre_5_15`、`pre_2_5`、`pre_0_2`の各bucket終端に近いタイミングで1回ずつ取得します。未表示のオッズは標準ではDBに保存せずスキップします。取得済みオッズは`pre_race_odds_snapshot`と券種別の`pre_race_win_odds`、`pre_race_place_odds`、`pre_race_wide_odds`、`pre_race_trio_odds`へ追記保存します。
+APIレスポンスのraw JSONPはデフォルトで`D:\horse_racing_ai\data\raw_odds_snapshot`へ保存します。保存先を変える場合は`--raw-dir`を指定してください。
+
 DBの収集状況と品質を確認する場合:
 
 ```powershell

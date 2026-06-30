@@ -18,9 +18,12 @@ MODEL_DIR = DATA_ROOT / "model"
 
 RAW_DIR = DATA_ROOT / "raw"
 
+PRE_RACE_ODDS_RAW_DIR = DATA_ROOT / "raw_odds_snapshot"
+
 
 def ensure_data_dirs() -> None:
     DATA_ROOT.mkdir(parents=True, exist_ok=True)
     FEAT_DIR.mkdir(parents=True, exist_ok=True)
     MODEL_DIR.mkdir(parents=True, exist_ok=True)
     RAW_DIR.mkdir(parents=True, exist_ok=True)
+    PRE_RACE_ODDS_RAW_DIR.mkdir(parents=True, exist_ok=True)

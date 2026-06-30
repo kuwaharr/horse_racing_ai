@@ -121,3 +121,76 @@ CREATE TABLE IF NOT EXISTS trio_odds (
     FOREIGN KEY (race_id, horse_number_2) REFERENCES runner(race_id, horse_number),
     FOREIGN KEY (race_id, horse_number_3) REFERENCES runner(race_id, horse_number)
 );
+
+CREATE TABLE IF NOT EXISTS pre_race_odds_snapshot (
+    snapshot_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    race_id TEXT NOT NULL,
+    bet_type TEXT NOT NULL,
+    source TEXT NOT NULL DEFAULT 'netkeiba',
+    snapshot_at TEXT NOT NULL,
+    race_date TEXT,
+    post_time TEXT,
+    post_time_at TEXT,
+    minutes_to_post REAL,
+    time_bucket TEXT NOT NULL,
+    status TEXT NOT NULL,
+    row_count INTEGER NOT NULL DEFAULT 0,
+    raw_path TEXT,
+    error TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CHECK (bet_type IN ('win', 'place', 'wide', 'trio')),
+    CHECK (status IN ('fetched', 'no_odds', 'failed'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_pre_race_odds_snapshot_race_bucket
+    ON pre_race_odds_snapshot(race_id, time_bucket, bet_type);
+
+CREATE INDEX IF NOT EXISTS idx_pre_race_odds_snapshot_post_time
+    ON pre_race_odds_snapshot(post_time_at);
+
+CREATE TABLE IF NOT EXISTS pre_race_win_odds (
+    snapshot_id INTEGER NOT NULL,
+    horse_number INTEGER NOT NULL,
+    odds REAL,
+    CHECK (odds IS NULL OR odds > 0),
+    PRIMARY KEY (snapshot_id, horse_number),
+    FOREIGN KEY (snapshot_id) REFERENCES pre_race_odds_snapshot(snapshot_id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS pre_race_place_odds (
+    snapshot_id INTEGER NOT NULL,
+    horse_number INTEGER NOT NULL,
+    odds_min REAL,
+    odds_max REAL,
+    CHECK (odds_min IS NULL OR odds_min > 0),
+    CHECK (odds_max IS NULL OR odds_max > 0),
+    CHECK (odds_min IS NULL OR odds_max IS NULL OR odds_min <= odds_max),
+    PRIMARY KEY (snapshot_id, horse_number),
+    FOREIGN KEY (snapshot_id) REFERENCES pre_race_odds_snapshot(snapshot_id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS pre_race_wide_odds (
+    snapshot_id INTEGER NOT NULL,
+    horse_number_1 INTEGER NOT NULL,
+    horse_number_2 INTEGER NOT NULL,
+    odds_min REAL,
+    odds_max REAL,
+    CHECK (horse_number_1 < horse_number_2),
+    CHECK (odds_min IS NULL OR odds_min > 0),
+    CHECK (odds_max IS NULL OR odds_max > 0),
+    CHECK (odds_min IS NULL OR odds_max IS NULL OR odds_min <= odds_max),
+    PRIMARY KEY (snapshot_id, horse_number_1, horse_number_2),
+    FOREIGN KEY (snapshot_id) REFERENCES pre_race_odds_snapshot(snapshot_id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS pre_race_trio_odds (
+    snapshot_id INTEGER NOT NULL,
+    horse_number_1 INTEGER NOT NULL,
+    horse_number_2 INTEGER NOT NULL,
+    horse_number_3 INTEGER NOT NULL,
+    odds REAL,
+    CHECK (horse_number_1 < horse_number_2 AND horse_number_2 < horse_number_3),
+    CHECK (odds IS NULL OR odds > 0),
+    PRIMARY KEY (snapshot_id, horse_number_1, horse_number_2, horse_number_3),
+    FOREIGN KEY (snapshot_id) REFERENCES pre_race_odds_snapshot(snapshot_id) ON DELETE CASCADE
+);

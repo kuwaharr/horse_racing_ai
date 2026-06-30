@@ -5,8 +5,10 @@ __pycache__/
 
 # data
 *.db
+*.db-journal
 *.json
 *.parquet
+tmp/
 
 # OS / editor
 .DS_Store

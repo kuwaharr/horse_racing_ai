@@ -31,6 +31,82 @@ CREATE INDEX IF NOT EXISTS idx_horse_pedigree_fetch_status
 """
 
 
+PRE_RACE_ODDS_SCHEMA_SQL = """
+CREATE TABLE IF NOT EXISTS pre_race_odds_snapshot (
+    snapshot_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    race_id TEXT NOT NULL,
+    bet_type TEXT NOT NULL,
+    source TEXT NOT NULL DEFAULT 'netkeiba',
+    snapshot_at TEXT NOT NULL,
+    race_date TEXT,
+    post_time TEXT,
+    post_time_at TEXT,
+    minutes_to_post REAL,
+    time_bucket TEXT NOT NULL,
+    status TEXT NOT NULL,
+    row_count INTEGER NOT NULL DEFAULT 0,
+    raw_path TEXT,
+    error TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CHECK (bet_type IN ('win', 'place', 'wide', 'trio')),
+    CHECK (status IN ('fetched', 'no_odds', 'failed'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_pre_race_odds_snapshot_race_bucket
+    ON pre_race_odds_snapshot(race_id, time_bucket, bet_type);
+
+CREATE INDEX IF NOT EXISTS idx_pre_race_odds_snapshot_post_time
+    ON pre_race_odds_snapshot(post_time_at);
+
+CREATE TABLE IF NOT EXISTS pre_race_win_odds (
+    snapshot_id INTEGER NOT NULL,
+    horse_number INTEGER NOT NULL,
+    odds REAL,
+    CHECK (odds IS NULL OR odds > 0),
+    PRIMARY KEY (snapshot_id, horse_number),
+    FOREIGN KEY (snapshot_id) REFERENCES pre_race_odds_snapshot(snapshot_id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS pre_race_place_odds (
+    snapshot_id INTEGER NOT NULL,
+    horse_number INTEGER NOT NULL,
+    odds_min REAL,
+    odds_max REAL,
+    CHECK (odds_min IS NULL OR odds_min > 0),
+    CHECK (odds_max IS NULL OR odds_max > 0),
+    CHECK (odds_min IS NULL OR odds_max IS NULL OR odds_min <= odds_max),
+    PRIMARY KEY (snapshot_id, horse_number),
+    FOREIGN KEY (snapshot_id) REFERENCES pre_race_odds_snapshot(snapshot_id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS pre_race_wide_odds (
+    snapshot_id INTEGER NOT NULL,
+    horse_number_1 INTEGER NOT NULL,
+    horse_number_2 INTEGER NOT NULL,
+    odds_min REAL,
+    odds_max REAL,
+    CHECK (horse_number_1 < horse_number_2),
+    CHECK (odds_min IS NULL OR odds_min > 0),
+    CHECK (odds_max IS NULL OR odds_max > 0),
+    CHECK (odds_min IS NULL OR odds_max IS NULL OR odds_min <= odds_max),
+    PRIMARY KEY (snapshot_id, horse_number_1, horse_number_2),
+    FOREIGN KEY (snapshot_id) REFERENCES pre_race_odds_snapshot(snapshot_id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS pre_race_trio_odds (
+    snapshot_id INTEGER NOT NULL,
+    horse_number_1 INTEGER NOT NULL,
+    horse_number_2 INTEGER NOT NULL,
+    horse_number_3 INTEGER NOT NULL,
+    odds REAL,
+    CHECK (horse_number_1 < horse_number_2 AND horse_number_2 < horse_number_3),
+    CHECK (odds IS NULL OR odds > 0),
+    PRIMARY KEY (snapshot_id, horse_number_1, horse_number_2, horse_number_3),
+    FOREIGN KEY (snapshot_id) REFERENCES pre_race_odds_snapshot(snapshot_id) ON DELETE CASCADE
+);
+"""
+
+
 def connect(db_path: Path) -> sqlite3.Connection:
     db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(db_path, timeout=DEFAULT_SQLITE_TIMEOUT_SEC)
@@ -59,6 +135,10 @@ def run_write_with_retry(
 
 def ensure_horse_table(cur: sqlite3.Cursor) -> None:
     cur.executescript(HORSE_SCHEMA_SQL)
+
+
+def ensure_pre_race_odds_tables(cur: sqlite3.Cursor) -> None:
+    cur.executescript(PRE_RACE_ODDS_SCHEMA_SQL)
 
 
 def get_race_ids_in_db(db_path: Path) -> set:
@@ -320,3 +400,37 @@ def upsert_trio(cur: sqlite3.Cursor, odds: dict) -> None:
             {", ".join([f"{c}=excluded.{c}" for c in set_cols])}
     """
     cur.execute(sql, [odds[c] for c in cols])
+
+
+def insert_pre_race_odds_snapshot(cur: sqlite3.Cursor, snapshot: dict) -> int:
+    cols = list(snapshot.keys())
+    sql = f"""
+        INSERT INTO pre_race_odds_snapshot ({", ".join(cols)})
+        VALUES ({", ".join(["?"] * len(cols))})
+    """
+    cur.execute(sql, [snapshot[c] for c in cols])
+    return int(cur.lastrowid)
+
+
+def insert_pre_race_odds_rows(
+    cur: sqlite3.Cursor,
+    bet_type: str,
+    snapshot_id: int,
+    rows: list[dict],
+) -> None:
+    table_by_bet_type = {
+        "win": "pre_race_win_odds",
+        "place": "pre_race_place_odds",
+        "wide": "pre_race_wide_odds",
+        "trio": "pre_race_trio_odds",
+    }
+    table = table_by_bet_type[bet_type]
+    for row in rows:
+        row_with_snapshot = {"snapshot_id": snapshot_id}
+        row_with_snapshot.update({k: v for k, v in row.items() if k != "race_id"})
+        cols = list(row_with_snapshot.keys())
+        sql = f"""
+            INSERT INTO {table} ({", ".join(cols)})
+            VALUES ({", ".join(["?"] * len(cols))})
+        """
+        cur.execute(sql, [row_with_snapshot[c] for c in cols])
