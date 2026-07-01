@@ -1,5 +1,6 @@
 import argparse
 import random
+import re
 import sys
 import time
 from dataclasses import dataclass
@@ -93,16 +94,59 @@ def parse_date_arg(value: str) -> date:
     return date.fromisoformat(value)
 
 
-def weekend_dates(today: date) -> list[date]:
-    if today.weekday() == 5:
-        return [today, today + timedelta(days=1), today + timedelta(days=2)]
-    if today.weekday() == 6:
-        return [today, today + timedelta(days=1)]
-    if today.weekday() == 0:
-        return [today]
-    saturday_offset = (5 - today.weekday()) % 7
-    saturday = today + timedelta(days=saturday_offset)
-    return [saturday, saturday + timedelta(days=1), saturday + timedelta(days=2)]
+def parse_kaisai_date(value: str) -> date | None:
+    try:
+        return datetime.strptime(value, "%Y%m%d").date()
+    except ValueError:
+        return None
+
+
+def extract_race_list_dates(soup, today: date) -> list[date]:
+    dates = []
+    seen = set()
+    for a in soup.find_all("a", href=True):
+        if not (m := re.search(r"(?:\?|&)kaisai_date=(\d{8})(?:\D|$)", a["href"])):
+            continue
+        value = parse_kaisai_date(m.group(1))
+        if value is None or value < today or value in seen:
+            continue
+        seen.add(value)
+        dates.append(value)
+    return sorted(dates)
+
+
+def fetch_listed_race_dates(today: date, min_sleep: float, max_sleep: float) -> list[date]:
+    result = make_soup(race_list_url_for_date(today))
+    sleep_between_requests(min_sleep, max_sleep)
+    if not result.success:
+        logger.warning("date=%s race list date discovery failed: %s", today, result.error)
+        return []
+
+    dates = extract_race_list_dates(result.value, today)
+    race_ids = [race_id for race_id in extract_race_ids(result.value) if is_jra_race_id(race_id)]
+    if race_ids and today not in dates:
+        dates.append(today)
+    dates = sorted(set(dates))
+    logger.info("race list dates discovered: %s", ",".join(f"{value:%Y-%m-%d}" for value in dates) or "none")
+    return dates
+
+
+def scan_race_dates(today: date, min_sleep: float, max_sleep: float, days: int = 8) -> list[date]:
+    dates = []
+    for offset in range(days):
+        value = today + timedelta(days=offset)
+        if fetch_race_ids_for_date(value, min_sleep, max_sleep):
+            dates.append(value)
+    logger.info("race dates found by scan: %s", ",".join(f"{value:%Y-%m-%d}" for value in dates) or "none")
+    return dates
+
+
+def weekend_dates(today: date, min_sleep: float, max_sleep: float) -> list[date]:
+    dates = fetch_listed_race_dates(today, min_sleep, max_sleep)
+    if dates:
+        return dates
+    logger.warning("falling back to scanning the next 8 days for JRA race lists")
+    return scan_race_dates(today, min_sleep, max_sleep)
 
 
 def time_bucket(minutes_to_post: float | None) -> str:
@@ -187,6 +231,12 @@ def resolve_race_targets(
         logger.info("%s/%s race_id=%s resolving race metadata", i, len(set(race_ids)), race_id)
         targets.append(fetch_race_target(race_id, min_sleep, max_sleep))
     return targets
+
+
+def filter_unstarted_targets(targets: list[RaceTarget], now: datetime) -> list[RaceTarget]:
+    filtered = [target for target in targets if target.post_time_at is not None and target.post_time_at >= now]
+    logger.info("unstarted targets=%s/%s", len(filtered), len(targets))
+    return filtered
 
 
 def collect_race_bet(
@@ -380,14 +430,17 @@ def build_targets(args) -> list[RaceTarget]:
         if today not in target_dates:
             target_dates.append(today)
     if args.weekend:
-        for value in weekend_dates(date.today()):
+        for value in weekend_dates(date.today(), args.min_sleep, args.max_sleep):
             if value not in target_dates:
                 target_dates.append(value)
 
     for target_date in target_dates:
         race_ids.extend(fetch_race_ids_for_date(target_date, args.min_sleep, args.max_sleep))
 
-    return resolve_race_targets(race_ids, args.min_sleep, args.max_sleep)
+    targets = resolve_race_targets(race_ids, args.min_sleep, args.max_sleep)
+    if args.weekend:
+        targets = filter_unstarted_targets(targets, datetime.now())
+    return targets
 
 
 def main() -> None:
@@ -397,7 +450,7 @@ def main() -> None:
     mode.add_argument("--watch", action="store_true", help="Watch races and collect once near each bucket boundary.")
     parser.add_argument("--date", action="append", help="Target date in YYYY-MM-DD. Can be specified multiple times.")
     parser.add_argument("--today", action="store_true", help="Target today's races.")
-    parser.add_argument("--weekend", action="store_true", help="Target upcoming Saturday, Sunday, and Monday.")
+    parser.add_argument("--weekend", action="store_true", help="Target upcoming listed JRA race dates from netkeiba.")
     parser.add_argument("--race-id", action="append", help="Collect a specific race_id. Can be specified multiple times.")
     parser.add_argument("--bet-types", type=parse_bet_types, default=list(BET_KINDS), help="Comma-separated bet types.")
     parser.add_argument("--db", type=Path, default=DB_PATH)
