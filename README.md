@@ -150,6 +150,7 @@ python scripts\scrape_to_db.py --url "<netkeibaのレース一覧URL>" --limit 1
 
 ```powershell
 python scripts\collect_pre_race_odds.py --sweep --date 2026-07-04
+python scripts\collect_pre_race_odds.py --watch --today
 python scripts\collect_pre_race_odds.py --sweep --weekend
 python scripts\collect_pre_race_odds.py --watch --weekend
 ```

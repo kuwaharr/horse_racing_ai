@@ -375,6 +375,10 @@ def build_targets(args) -> list[RaceTarget]:
     target_dates: list[date] = []
     for value in args.date or []:
         target_dates.append(parse_date_arg(value))
+    if args.today:
+        today = date.today()
+        if today not in target_dates:
+            target_dates.append(today)
     if args.weekend:
         for value in weekend_dates(date.today()):
             if value not in target_dates:
@@ -392,6 +396,7 @@ def main() -> None:
     mode.add_argument("--sweep", action="store_true", help="Collect currently available odds once.")
     mode.add_argument("--watch", action="store_true", help="Watch races and collect once near each bucket boundary.")
     parser.add_argument("--date", action="append", help="Target date in YYYY-MM-DD. Can be specified multiple times.")
+    parser.add_argument("--today", action="store_true", help="Target today's races.")
     parser.add_argument("--weekend", action="store_true", help="Target upcoming Saturday, Sunday, and Monday.")
     parser.add_argument("--race-id", action="append", help="Collect a specific race_id. Can be specified multiple times.")
     parser.add_argument("--bet-types", type=parse_bet_types, default=list(BET_KINDS), help="Comma-separated bet types.")
@@ -403,8 +408,8 @@ def main() -> None:
     parser.add_argument("--record-empty", action="store_true", help="Store failed/no-odds snapshots instead of only logging them.")
     args = parser.parse_args()
 
-    if not args.date and not args.weekend and not args.race_id:
-        parser.error("At least one of --date, --weekend, or --race-id is required.")
+    if not args.date and not args.today and not args.weekend and not args.race_id:
+        parser.error("At least one of --date, --today, --weekend, or --race-id is required.")
 
     with connect(args.db) as conn:
         ensure_pre_race_odds_tables(conn.cursor())
