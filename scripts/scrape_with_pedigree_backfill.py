@@ -68,7 +68,7 @@ def _consume_stop_command(commands: queue.Queue[str], stop_command: str) -> bool
             continue
         if command == stop_command:
             should_stop = True
-            logger.info("Stop command received; will stop after pedigree backfill")
+            logger.info("Stop command received")
         else:
             logger.warning("Unrecognized command ignored: %s", command)
     return should_stop
@@ -97,7 +97,7 @@ def _pending_pedigree_count(db_path: Path) -> int:
         return int(cur.fetchone()[0])
 
 
-def _run_pedigree_backfill(args) -> None:
+def _run_pedigree_backfill(args) -> bool:
     command = [
         sys.executable,
         str(ROOT_DIR / "scripts" / "fetch_pending_horse_pedigrees.py"),
@@ -115,42 +115,67 @@ def _run_pedigree_backfill(args) -> None:
     completed = subprocess.run(command, cwd=ROOT_DIR, check=False, stdin=subprocess.DEVNULL)
     if completed.returncode == 0:
         logger.info("Pedigree backfill finished")
+        return True
     else:
         logger.error("Pedigree backfill failed returncode=%s", completed.returncode)
+        return False
 
 
-def _maybe_run_pedigree_backfill(args) -> None:
+def _run_pedigree_backfill_until_empty(args) -> None:
+    while True:
+        pending = _pending_pedigree_count(args.db)
+        if pending == 0:
+            logger.info("Pending pedigree backfill finished; no pending pedigrees remain")
+            return
+        logger.info("Pending pedigrees remain after stop request: %s", pending)
+        if not _run_pedigree_backfill(args):
+            logger.error("Stopping with pending pedigrees remaining because pedigree backfill failed")
+            return
+
+
+def _maybe_run_pedigree_backfill(args) -> bool:
     pending = _pending_pedigree_count(args.db)
     logger.info("Pending pedigrees: %s", pending)
+    if pending == 0:
+        logger.info("Skipping pedigree backfill: no pending pedigrees")
+        return False
     if pending < args.pedigree_threshold:
         logger.info(
             "Skipping pedigree backfill: pending=%s < threshold=%s",
             pending,
             args.pedigree_threshold,
         )
-        return
-    _run_pedigree_backfill(args)
+        return False
+    return _run_pedigree_backfill(args)
 
 
-def _process_page(url: str, page: int) -> bool:
+def _process_page(
+    url: str,
+    page: int,
+    commands: queue.Queue[str],
+    stop_command: str,
+) -> tuple[bool, bool]:
     r_soup = make_soup(url)
     sleep_between_requests()
     if not r_soup.success:
         logger.error("make_soup failed %s", r_soup.error)
         sleep_backoff()
-        return False
+        return False, False
 
     race_ids = extract_race_ids(r_soup.value)
     if not race_ids:
         logger.info("Scraped all pages")
-        return False
+        return False, False
 
     logger.info("Page %s found %s race_ids in race list page", page, len(race_ids))
     for i, race_id in enumerate(race_ids, start=1):
         logger.info("%s/%s race_id=%s Processing", i, len(race_ids), race_id)
         scrape_race(race_id)
+        if _consume_stop_command(commands, stop_command):
+            logger.info("Stop requested after race_id=%s; leaving page %s early", race_id, page)
+            return True, True
     logger.info("Page %s done", page)
-    return True
+    return True, False
 
 
 def main() -> None:
@@ -168,7 +193,7 @@ def main() -> None:
     arg_parser.add_argument(
         "--stop-command",
         default="stop",
-        help="Command accepted on stdin to stop after the current page and pedigree backfill.",
+        help="Command accepted on stdin to stop after the current race and pending pedigree handling.",
     )
     arg_parser.add_argument(
         "--pedigree-threshold",
@@ -202,7 +227,8 @@ def main() -> None:
     )
     _check_race_ids_in_db(args.db)
     logger.info(
-        "Auto mode command listener started. Type '%s' and Enter to stop after the current page and pedigree backfill.",
+        "Auto mode command listener started. Type '%s' and Enter to stop after the current race; "
+        "if received during pedigree backfill, pending pedigree backfill will continue until empty before exit.",
         args.stop_command,
     )
 
@@ -211,15 +237,25 @@ def main() -> None:
     current_page = _current_page_from_url(url)
     processed_pages = 0
     while args.limit_pages is None or processed_pages < args.limit_pages:
-        page_processed = _process_page(url, current_page)
+        page_processed, stop_after_race = _process_page(url, current_page, commands, args.stop_command)
         if not page_processed:
             break
 
-        stop_requested = _consume_stop_command(commands, args.stop_command)
-        _maybe_run_pedigree_backfill(args)
+        if stop_after_race:
+            _maybe_run_pedigree_backfill(args)
+            _check_race_ids_in_db(args.db)
+            logger.info("Stopped after race scraping on page %s", current_page)
+            break
+
+        backfill_ran = _maybe_run_pedigree_backfill(args)
+        stop_after_backfill = _consume_stop_command(commands, args.stop_command)
         _check_race_ids_in_db(args.db)
-        if stop_requested:
-            logger.info("Stopped after page %s and pedigree backfill", current_page)
+        if stop_after_backfill:
+            if backfill_ran:
+                _run_pedigree_backfill_until_empty(args)
+                logger.info("Stopped after pedigree backfill on page %s", current_page)
+            else:
+                logger.info("Stopped after page %s without pedigree backfill", current_page)
             break
 
         url = increment_page(url)

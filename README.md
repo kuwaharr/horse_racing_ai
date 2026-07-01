@@ -134,7 +134,7 @@ python scripts\scrape_to_db.py --url "<netkeibaのレース一覧URL>" --mode au
 python scripts\scrape_with_pedigree_backfill.py --url "<netkeibaのレース一覧URL>" --pedigree-threshold 100
 ```
 
-このスクリプトで`stop`と入力してEnterを押すと、現在ページの処理を終え、血統pending確認と必要な血統取得まで実行してから停止します。停止文字列を変える場合:
+このスクリプトでレース取得中に`stop`と入力してEnterを押すと、現在処理中のレースを最後まで取得し、血統pending数を確認します。pendingが閾値以上なら血統取得を実行し、閾値未満なら血統取得をせず停止します。血統取得中に`stop`を受け付けた場合は、pendingがなくなるまで血統取得を続けてから停止します。停止文字列を変える場合:
 
 ```powershell
 python scripts\scrape_with_pedigree_backfill.py --url "<netkeibaのレース一覧URL>" --stop-command quit
