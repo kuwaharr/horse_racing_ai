@@ -488,10 +488,23 @@ def _append_history_features(df):
     df = df.sort_values(["date", "race_id", "horse_number"]).copy()
     df["distance_band"] = df["distance"].map(_distance_band)
     df["date_obj"] = df["date"].map(date.fromisoformat)
+    df["__orig_idx"] = df.index
+
+    # 辞書のリストに変換して高速化
+    records = df.to_dict("records")
+
+    # 日付ごとにグループ化
+    records_by_date = defaultdict(list)
+    for r in records:
+        records_by_date[r["date"]].append(r)
+
+    sorted_dates = sorted(records_by_date.keys())
     history_rows = []
 
-    for _, day_df in df.groupby("date", sort=True):
-        for idx, row in day_df.iterrows():
+    for day in sorted_dates:
+        day_records = records_by_date[day]
+        for row in day_records:
+            idx = row["__orig_idx"]
             history_row = {"__idx": idx}
             course_key = (row["track_id"], row["surface_id"], row["distance_band"])
             for name, id_col in entity_specs:
@@ -649,7 +662,7 @@ def _append_history_features(df):
                     row["distance_band"],
                 ),
             ]:
-                if id_col not in df.columns or _missing_key(row[id_col]):
+                if id_col not in row or _missing_key(row[id_col]):
                     item = _empty_history_stat()
                 else:
                     item = stat_map[(row[id_col], key_value)]
@@ -666,7 +679,7 @@ def _append_history_features(df):
                 )
             history_rows.append(history_row)
 
-        for _, row in day_df.iterrows():
+        for row in day_records:
             target = int(row["target_top3"])
             finish = float(row["finish_position"])
             prior_top3_stats["starts"] += 1
@@ -747,7 +760,7 @@ def _append_history_features(df):
             ]:
                 item["starts"] += 1
                 item["top3"] += target
-            if "sire_id" in df.columns and not _missing_key(row["sire_id"]):
+            if "sire_id" in row and not _missing_key(row["sire_id"]):
                 for item in [
                     sire_track_stats[(row["sire_id"], row["track_id"])],
                     sire_surface_stats[(row["sire_id"], row["surface_id"])],
@@ -755,7 +768,7 @@ def _append_history_features(df):
                 ]:
                     item["starts"] += 1
                     item["top3"] += target
-            if "broodmare_sire_id" in df.columns and not _missing_key(row["broodmare_sire_id"]):
+            if "broodmare_sire_id" in row and not _missing_key(row["broodmare_sire_id"]):
                 for item in [
                     broodmare_sire_track_stats[(row["broodmare_sire_id"], row["track_id"])],
                     broodmare_sire_surface_stats[(row["broodmare_sire_id"], row["surface_id"])],
@@ -772,7 +785,7 @@ def _append_history_features(df):
     history_df = pd.DataFrame(history_rows).set_index("__idx")
     df = df.join(history_df).sort_values(["date", "race_id", "horse_number"])
     df = _append_race_relative_features(df)
-    return df.drop(columns=["distance_band", "date_obj"])
+    return df.drop(columns=["distance_band", "date_obj", "__orig_idx"])
 
 
 def _empty_history_stat() -> dict:
@@ -950,13 +963,20 @@ def _append_race_relative_features(df):
         ("weight", False),
         ("age", True),
     ]
+
+    mean_cols = [col for col, _ in relative_specs]
+    grouped = df.groupby("race_id", sort=False)
+    means_df = grouped[mean_cols].transform("mean")
+
     relative_columns = {}
+    for col in mean_cols:
+        relative_columns[f"race_{col}_diff"] = df[col] - means_df[col]
+
+    filled_df = df[mean_cols].fillna(-1)
+    filled_grouped = filled_df.groupby(df["race_id"], sort=False)
     for col, ascending in relative_specs:
-        rank_col = f"race_{col}_rank"
-        diff_col = f"race_{col}_diff"
-        filled = df[col].fillna(-1)
-        relative_columns[rank_col] = filled.groupby(df["race_id"]).rank(method="average", ascending=ascending)
-        relative_columns[diff_col] = df[col] - df.groupby("race_id")[col].transform("mean")
+        relative_columns[f"race_{col}_rank"] = filled_grouped[col].rank(method="average", ascending=ascending)
+
     return pd.concat([df, pd.DataFrame(relative_columns, index=df.index)], axis=1)
 
 

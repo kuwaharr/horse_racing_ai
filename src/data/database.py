@@ -7,6 +7,13 @@ from pathlib import Path
 DEFAULT_SQLITE_TIMEOUT_SEC = 60.0
 DEFAULT_BUSY_TIMEOUT_MS = 60_000
 
+PRE_RACE_ODDS_ROW_TARGETS = {
+    "win": ("pre_race_win_odds", ("horse_number", "odds")),
+    "place": ("pre_race_place_odds", ("horse_number", "odds_min", "odds_max")),
+    "wide": ("pre_race_wide_odds", ("horse_number_1", "horse_number_2", "odds_min", "odds_max")),
+    "trio": ("pre_race_trio_odds", ("horse_number_1", "horse_number_2", "horse_number_3", "odds")),
+}
+
 
 HORSE_SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS horse (
@@ -418,19 +425,14 @@ def insert_pre_race_odds_rows(
     snapshot_id: int,
     rows: list[dict],
 ) -> None:
-    table_by_bet_type = {
-        "win": "pre_race_win_odds",
-        "place": "pre_race_place_odds",
-        "wide": "pre_race_wide_odds",
-        "trio": "pre_race_trio_odds",
-    }
-    table = table_by_bet_type[bet_type]
-    for row in rows:
-        row_with_snapshot = {"snapshot_id": snapshot_id}
-        row_with_snapshot.update({k: v for k, v in row.items() if k != "race_id"})
-        cols = list(row_with_snapshot.keys())
-        sql = f"""
-            INSERT INTO {table} ({", ".join(cols)})
-            VALUES ({", ".join(["?"] * len(cols))})
-        """
-        cur.execute(sql, [row_with_snapshot[c] for c in cols])
+    if not rows:
+        return
+    table, row_cols = PRE_RACE_ODDS_ROW_TARGETS[bet_type]
+    cols = ("snapshot_id", *row_cols)
+
+    sql = f"""
+        INSERT INTO {table} ({", ".join(cols)})
+        VALUES ({", ".join(["?"] * len(cols))})
+    """
+    params = ((snapshot_id, *(row[c] for c in row_cols)) for row in rows)
+    cur.executemany(sql, params)
