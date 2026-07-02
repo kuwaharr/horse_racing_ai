@@ -267,6 +267,14 @@ python scripts\search_wide_rules_from_predictions.py --engine fastparquet --pred
 
 現時点のワイド探索では、`catboost_place_top3_predictions_affinity_lift_no_horse_id.parquet`を使った候補が最上位です。条件は、同一レース内のペア予測スコア上位5点、2頭の予測順位がともに3位以内、ペア予測スコア`0.10`以上、2頭の予測確率の小さい方が`0.25`以上、ワイドオッズ中間値`[10.0,100.0)`、開催場`1,2,3,7,10`除外です。walk-forward 4 foldで379レース、520点、37的中、的中率7.12%、購入率18.66%、ワイドオッズ中間値ベース回収率114.36%、最低fold回収率100.63%でした。最新のデフォルト複勝予測`catboost_place_top3_predictions.parquet`で同条件の探索候補を更新すると、トップは距離`2000m以上`、ペア予測スコア上位5点、2頭の予測順位がともに3位以内、ワイドオッズ中間値`[2.0,30.0)`で、535レース、1,289点、291的中、購入率19.05%、回収率102.63%でした。
 
+保存済みの複勝3着内予測から3連複候補を作り、購入レース割合20%前後のルールを探索する場合:
+
+```powershell
+python scripts\search_trio_rules_from_predictions.py --engine fastparquet --predictions "D:\horse_racing_ai\data\model\catboost_place_top3_predictions_affinity_lift_no_horse_id.parquet" --min-fold-return-mid 80 --output "D:\horse_racing_ai\data\model\trio_rule_search_results_affinity_lift_no_horse_id_minfold80.csv" --selections-output "D:\horse_racing_ai\data\model\trio_rule_selections_affinity_lift_no_horse_id_minfold80.csv"
+```
+
+現時点の3連複探索では、`catboost_place_top3_predictions_affinity_lift_no_horse_id.parquet`を使った候補が上位です。条件は、同一レース内の3頭組予測スコア上位10点、3頭の予測順位がすべて6位以内、3連複オッズ`[100.0,1000.0)`、芝、開催場`1,2,3,7,10`除外です。walk-forward 4 foldで385レース、939点、9的中、的中率0.96%、購入率18.96%、3連複回収率142.94%、最低fold回収率93.92%でした。最新のデフォルト複勝予測`catboost_place_top3_predictions.parquet`では、最低fold回収率80%以上のトップが606レース、1,217点、15的中、購入率21.58%、回収率115.82%でした。
+
 血統特徴量あり/なしを比較し、購入率20%前後の合議ルール候補を探す場合:
 
 ```powershell
