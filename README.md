@@ -259,6 +259,14 @@ python scripts\search_rules_from_predictions.py --engine fastparquet --profile w
 python scripts\evaluate_fixed_rule_from_predictions.py --engine fastparquet --predictions "D:\horse_racing_ai\data\model\catboost_win_top1_predictions.parquet" --pred-min 0.15 --odds-min 1.2 --odds-max 3.5 --distance-min 1600 --distance-max none --include-track-ids "4,5,6,8,9" --surface-id 0 --pred-rank-max 3
 ```
 
+保存済みの複勝3着内予測からワイド候補を作り、購入レース割合20%前後のルールを探索する場合:
+
+```powershell
+python scripts\search_wide_rules_from_predictions.py --engine fastparquet --predictions "D:\horse_racing_ai\data\model\catboost_place_top3_predictions_affinity_lift_no_horse_id.parquet" --min-fold-return-mid 80 --output "D:\horse_racing_ai\data\model\wide_rule_search_results_affinity_lift_no_horse_id_minfold80.csv"
+```
+
+現時点のワイド探索では、`catboost_place_top3_predictions_affinity_lift_no_horse_id.parquet`を使った候補が最上位です。条件は、同一レース内のペア予測スコア上位5点、2頭の予測順位がともに3位以内、ワイドオッズ中間値`[10.0,100.0)`、開催場`1,2,3,7,10`除外です。walk-forward 4 foldで431レース、618点、39的中、的中率6.31%、購入率21.22%、ワイドオッズ中間値ベース回収率101.90%、最低fold回収率82.70%でした。
+
 血統特徴量あり/なしを比較し、購入率20%前後の合議ルール候補を探す場合:
 
 ```powershell
