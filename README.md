@@ -248,10 +248,10 @@ python scripts\build_place_top3_dataset.py --kind win-eval-odds --engine fastpar
 
 ```powershell
 python scripts\generate_catboost_predictions.py --engine fastparquet --training-dataset "D:\horse_racing_ai\data\feature\win_top1_dataset.parquet" --odds-dataset "D:\horse_racing_ai\data\feature\win_top1_eval_odds.parquet" --output "D:\horse_racing_ai\data\model\catboost_win_top1_predictions.parquet"
-python scripts\search_rules_from_predictions.py --engine fastparquet --profile win --predictions "D:\horse_racing_ai\data\model\catboost_win_top1_predictions.parquet" --min-buy-rate 20 --min-selections 70 --include-rank-ev-filters
+python scripts\search_rules_from_predictions.py --engine fastparquet --profile win --predictions "D:\horse_racing_ai\data\model\catboost_win_top1_predictions.parquet" --min-buy-rate 18 --max-buy-rate 22 --min-selections 70 --include-rank-ev-filters
 ```
 
-現時点の単勝20%以上探索では、最高候補でも回収率は90%未満です。最新の改善候補は、`pred_top3>=0.15`、単勝オッズ`[1.2,3.5)`、距離`1600m以上`、開催場`4,5,6,8,9`、芝、同一レース内の予測順位`3位以内`です。walk-forward 4 foldで562レース、712点、276的中、的中率38.76%、購入率20.53%、単勝回収率88.30%でした。従来の購入率20%以上候補は、`pred_top3>=0.12`、単勝オッズ`[1.0,4.0)`、距離`1400m以上`、開催場`4,5,6,9`、芝で601レース、859点、300的中、的中率34.92%、購入率21.95%、単勝回収率86.00%でした。
+現時点の単勝20%前後探索では、最高候補でも回収率は90%未満です。ROI優先の最新候補は、`pred_top3>=0.15`、単勝オッズ`[3.0,10.0)`、距離`1600m以上`、開催場`4,5,6,8,9`、芝、同一レース内の予測順位`3位以内`です。walk-forward 4 foldで534レース、759点、144的中、的中率18.97%、購入率19.50%、単勝回収率89.06%でした。ただし最低fold回収率は73.17%まで落ちます。安定性寄りの候補は、`pred_top3>=0.15`、単勝オッズ`[1.2,3.5)`、距離`1600m以上`、開催場`4,5,6,8,9`、芝、同一レース内の予測順位`3位以内`で、562レース、712点、276的中、的中率38.76%、購入率20.53%、単勝回収率88.30%、最低fold回収率86.05%でした。
 
 改善候補を固定評価する場合:
 
@@ -265,7 +265,7 @@ python scripts\evaluate_fixed_rule_from_predictions.py --engine fastparquet --pr
 python scripts\search_wide_rules_from_predictions.py --engine fastparquet --predictions "D:\horse_racing_ai\data\model\catboost_place_top3_predictions_affinity_lift_no_horse_id.parquet" --min-fold-return-mid 80 --output "D:\horse_racing_ai\data\model\wide_rule_search_results_affinity_lift_no_horse_id_minfold80.csv" --selections-output "D:\horse_racing_ai\data\model\wide_rule_selections_affinity_lift_no_horse_id_minfold80.csv"
 ```
 
-現時点のワイド探索では、`catboost_place_top3_predictions_affinity_lift_no_horse_id.parquet`を使った候補が最上位です。条件は、同一レース内のペア予測スコア上位5点、2頭の予測順位がともに3位以内、ペア予測スコア`0.10`以上、2頭の予測確率の小さい方が`0.25`以上、ワイドオッズ中間値`[10.0,100.0)`、開催場`1,2,3,7,10`除外です。walk-forward 4 foldで379レース、520点、37的中、的中率7.12%、購入率18.66%、ワイドオッズ中間値ベース回収率114.36%、最低fold回収率100.63%でした。
+現時点のワイド探索では、`catboost_place_top3_predictions_affinity_lift_no_horse_id.parquet`を使った候補が最上位です。条件は、同一レース内のペア予測スコア上位5点、2頭の予測順位がともに3位以内、ペア予測スコア`0.10`以上、2頭の予測確率の小さい方が`0.25`以上、ワイドオッズ中間値`[10.0,100.0)`、開催場`1,2,3,7,10`除外です。walk-forward 4 foldで379レース、520点、37的中、的中率7.12%、購入率18.66%、ワイドオッズ中間値ベース回収率114.36%、最低fold回収率100.63%でした。最新のデフォルト複勝予測`catboost_place_top3_predictions.parquet`で同条件の探索候補を更新すると、トップは距離`2000m以上`、ペア予測スコア上位5点、2頭の予測順位がともに3位以内、ワイドオッズ中間値`[2.0,30.0)`で、535レース、1,289点、291的中、購入率19.05%、回収率102.63%でした。
 
 血統特徴量あり/なしを比較し、購入率20%前後の合議ルール候補を探す場合:
 
@@ -370,7 +370,7 @@ python scripts\evaluate_fixed_place_top3_catboost_rule.py --engine fastparquet -
 python scripts\evaluate_fixed_place_top3_catboost_rule.py --engine fastparquet --train-surface-id 0 --surface-id 0
 ```
 
-現時点の代表確認は、保存済みCatBoost予測から購入率20%以上の候補を探索する流れです。学習データにはレース後に確定する`popularity`、単勝オッズ、複勝オッズを含めません。これらは予測後の回収率評価と買い基準検証にだけ使います。最新DB反映後のデフォルト予測では、`pred_top3>=0.34`、複勝オッズ中間値`[3.2,6.0)`、距離`1200m以上`、開催場`3,7,10`除外、同一レース内の予測順位`5位以内`、`pred_top3 * 複勝オッズ中間値 >= 1.4`が上位候補です。walk-forward 4 foldで571レース、671点、212的中、的中率31.59%、購入率20.59%、複勝オッズ中間値ベース回収率133.09%でした。順位/期待値条件なしの旧候補は603レース、716点、225的中、的中率31.42%、購入率21.75%、回収率126.81%でした。
+現時点の代表確認は、保存済みCatBoost予測から購入率20%前後の候補を探索する流れです。学習データにはレース後に確定する`popularity`、単勝オッズ、複勝オッズを含めません。これらは予測後の回収率評価と買い基準検証にだけ使います。最新DB反映後のデフォルト予測では、`pred_top3>=0.37`、複勝オッズ中間値`[3.2,6.0)`、距離`1200m以上`、同一レース内の予測順位`5位以内`、`pred_top3 * 複勝オッズ中間値 >= 1.5`が上位候補です。walk-forward 4 foldで521レース、600点、189的中、的中率31.50%、購入率18.55%、複勝オッズ中間値ベース回収率133.62%、最低fold回収率92.34%でした。更新前の代表候補は、`pred_top3>=0.34`、複勝オッズ中間値`[3.2,6.0)`、距離`1200m以上`、開催場`3,7,10`除外、同一レース内の予測順位`5位以内`、`pred_top3 * 複勝オッズ中間値 >= 1.4`で、571レース、671点、212的中、購入率20.59%、回収率133.09%でした。
 
 CatBoostのwalk-forward予測を保存し、重い再学習を避けて買い条件だけを高速に検証する場合:
 
@@ -379,10 +379,10 @@ python scripts\generate_catboost_predictions.py --engine fastparquet
 python scripts\evaluate_fixed_rule_from_predictions.py --engine fastparquet --pred-min 0.40
 ```
 
-購入率20%以上を維持した改善候補を再評価する場合:
+購入率20%前後の改善候補を再評価する場合:
 
 ```powershell
-python scripts\evaluate_fixed_rule_from_predictions.py --engine fastparquet --pred-min 0.34 --odds-min 3.2 --odds-max 6.0 --distance-min 1200 --distance-max none --exclude-track-ids "3,7,10" --pred-rank-max 5 --ev-mid-min 1.4
+python scripts\evaluate_fixed_rule_from_predictions.py --engine fastparquet --pred-min 0.37 --odds-min 3.2 --odds-max 6.0 --distance-min 1200 --distance-max none --pred-rank-max 5 --ev-mid-min 1.5
 ```
 
 本番予測用にCatBoostモデルを保存する場合。以後の予測実行ではこの保存済みモデルを読み込むため、毎回学習し直しません。
@@ -461,16 +461,16 @@ python scripts\evaluate_fixed_rule_from_predictions.py --engine fastparquet --pr
 python scripts\search_rules_from_predictions.py --engine fastparquet --min-selections 120 --min-fold-selections 20
 ```
 
-購入率を最低20%確保して探索する場合:
+購入率20%前後で探索する場合:
 
 ```powershell
-python scripts\search_rules_from_predictions.py --engine fastparquet --min-buy-rate 20 --min-selections 70
+python scripts\search_rules_from_predictions.py --engine fastparquet --min-buy-rate 18 --max-buy-rate 22 --min-selections 70
 ```
 
 同一レース内の予測順位と、予測確率に複勝オッズ中間値を掛けた期待値条件も含めて探索する場合:
 
 ```powershell
-python scripts\search_rules_from_predictions.py --engine fastparquet --min-buy-rate 20 --min-selections 70 --min-fold-selections 10 --include-rank-ev-filters
+python scripts\search_rules_from_predictions.py --engine fastparquet --min-buy-rate 18 --max-buy-rate 22 --min-selections 70 --min-fold-selections 10 --include-rank-ev-filters
 ```
 
 各foldの回収率下限も指定して、不安定な候補を除外する場合:

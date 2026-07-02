@@ -19,7 +19,7 @@ def _format_pct(value: float | None) -> str:
 
 def _candidate_rules(profile: str = "place", include_rank_ev_filters: bool = False) -> list[dict]:
     if profile == "place":
-        pred_thresholds = [0.30, 0.32, 0.34, 0.35, 0.36, 0.38, 0.40, 0.45, 0.50]
+        pred_thresholds = [0.30, 0.32, 0.34, 0.35, 0.36, 0.37, 0.38, 0.40, 0.45, 0.50]
         odds_ranges = [
             (2.0, 3.0),
             (2.5, 5.0),
@@ -100,7 +100,7 @@ def _candidate_rules(profile: str = "place", include_rank_ev_filters: bool = Fal
             rank_filters = [None, 1, 2, 3, 4, 5, 6, 8]
         else:
             rank_filters = [None, 4, 5, 6, 8]
-            ev_mid_filters = [None, 1.2, 1.3, 1.4]
+            ev_mid_filters = [None, 1.2, 1.3, 1.4, 1.5]
 
     candidates = []
     for pred_min in pred_thresholds:

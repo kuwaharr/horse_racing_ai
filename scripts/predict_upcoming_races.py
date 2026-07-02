@@ -55,14 +55,14 @@ OUTPUT_COLUMNS = [
 
 
 PLACE_RULE = {
-    "pred_min": 0.34,
+    "pred_min": 0.37,
     "odds_min": 3.2,
     "odds_max": 6.0,
     "distance_min": 1200,
     "distance_max": None,
-    "exclude_track_ids": [3, 7, 10],
+    "exclude_track_ids": None,
     "pred_rank_max": 5,
-    "ev_mid_min": 1.4,
+    "ev_mid_min": 1.5,
 }
 
 WIN_RULE = {
