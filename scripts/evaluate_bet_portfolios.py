@@ -24,6 +24,10 @@ from scripts.search_wide_rules_from_predictions import (  # noqa: E402
     _mask_for_rule as _mask_for_wide_rule,
 )
 from src.data.paths import DB_PATH, MODEL_DIR  # noqa: E402
+from scripts.evaluate_prediction_consensus_rules import (  # noqa: E402
+    _load_consensus_predictions,
+    _apply_consensus_rule
+)
 
 
 DEFAULT_WIN_PREDICTIONS = MODEL_DIR / "catboost_win_top1_predictions.parquet"
@@ -166,6 +170,36 @@ TRIO_HIT_RATE_RULE = {
     "track_label": "exclude_3_7_10",
     "exclude_track_ids": (3, 7, 10),
 }
+TRIO_HIGH_ROI_RULE = {
+    "score_topn": 10,
+    "rank_max": 4,
+    "trio_score_min": 0.0,
+    "trio_min_pred_min": 0.0,
+    "ev_mid_min": 0.0,
+    "odds_min": 20.0,
+    "odds_max": 200.0,
+    "surface_label": "turf",
+    "surface_id": 0,
+    "distance_label": "1800_2600",
+    "distance_min": 1800,
+    "distance_max": 2600,
+    "track_label": "exclude_1_2_3_7_10",
+    "exclude_track_ids": (1, 2, 3, 7, 10),
+}
+PEDIGREE_MID_20_STABLE_RULE = {
+    "name": "pedigree_mid_20_stable_value",
+    "mode": "intersection",
+    "base_pred_min": 0.34,
+    "secondary_pred_min": 0.36,
+    "avg_pred_min": None,
+    "odds_min": 3.2,
+    "odds_max": 6.0,
+    "distance_min": None,
+    "distance_max": None,
+    "include_track_ids": [4, 5, 6, 8, 9],
+    "exclude_track_ids": None,
+    "surface_id": None,
+}
 
 STRATEGY_DESCRIPTIONS = {
     "win_stable": "win pred>=0.15 odds[1.2,3.5) turf 1600m+ tracks 4,5,6,8,9 rank<=3",
@@ -174,11 +208,13 @@ STRATEGY_DESCRIPTIONS = {
     "place_latest": "place pred>=0.37 odds[3.2,6.0) 1200m+ rank<=5 ev>=1.5",
     "place_broad": "place pred>=0.37 odds[3.0,6.0) 1200m+ rank<=5 ev>=1.5",
     "place_stable": "place pred>=0.34 odds[3.2,6.0) 1200m+ exclude 3,7,10 rank<=5 ev>=1.4",
+    "pedigree_mid_20_stable": "consensus place base>=0.34 sec>=0.36 odds[3.2,6.0) tracks 4,5,6,8,9",
     "wide_roi": "wide score top5 rank<=3 score>=0.10 min_pred>=0.25 odds[10,100) exclude 1,2,3,7,10",
     "wide_broad": "wide score top5 rank<=3 score>=0.07 min_pred>=0.22 ev>=1.0 odds[10,100) exclude 1,2,3,7,10",
     "trio_roi": "trio score top10 rank<=6 odds[100,1000) turf exclude 1,2,3,7,10",
     "trio_balanced": "trio score top10 rank<=4 odds[1,200) turf 1800-2600 exclude 1,2,3,7,10",
     "trio_hit_rate": "trio score top3 rank<=4 odds[1,100) turf 1800-2600 exclude 3,7,10",
+    "trio_high_roi": "trio score top10 rank<=4 odds[20,200) turf 1800-2600 exclude 1,2,3,7,10",
 }
 
 PORTFOLIOS = [
@@ -223,6 +259,16 @@ PORTFOLIOS = [
         "strategies": ["place_broad", "trio_roi"],
     },
     {
+        "name": "pedigree_trio_roi",
+        "description": "pedigree place consensus plus high-ROI trio (best overall ROI)",
+        "strategies": ["pedigree_mid_20_stable", "trio_high_roi"],
+    },
+    {
+        "name": "trio_double_roi",
+        "description": "combination of two high-ROI trio rules",
+        "strategies": ["trio_roi", "trio_high_roi"],
+    },
+    {
         "name": "base_low_variance",
         "description": "win stable plus place only",
         "strategies": ["win_stable", "place_latest"],
@@ -231,9 +277,9 @@ PORTFOLIOS = [
 
 COMBINATION_GROUPS = {
     "win": ["win_stable", "win_roi", "win_broad"],
-    "place": ["place_latest", "place_broad", "place_stable"],
+    "place": ["place_latest", "place_broad", "place_stable", "pedigree_mid_20_stable"],
     "wide": ["wide_roi", "wide_broad"],
-    "trio": ["trio_roi", "trio_balanced", "trio_hit_rate"],
+    "trio": ["trio_roi", "trio_balanced", "trio_hit_rate", "trio_high_roi"],
 }
 
 
@@ -448,6 +494,22 @@ def main() -> None:
     place_predictions = _load_rule_predictions(args.place_predictions, args.engine)
     exotic_predictions = _load_trio_predictions(args.exotic_predictions, args.engine)
 
+    ped_pred_path = MODEL_DIR / "catboost_place_top3_predictions_pedigree.parquet"
+    noped_pred_path = MODEL_DIR / "catboost_place_top3_predictions_no_pedigree.parquet"
+    pedigree_consensus_df = _load_consensus_predictions(ped_pred_path, noped_pred_path, args.engine)
+
+    ped_selected = _apply_consensus_rule(pedigree_consensus_df, PEDIGREE_MID_20_STABLE_RULE)
+    ped_selected["bet_type"] = "place"
+    ped_selected["strategy"] = "pedigree_mid_20_stable"
+    ped_selected["stake"] = args.stake
+    ped_selected["hit"] = ped_selected["target_top3"].astype("int8")
+    ped_selected["odds"] = ped_selected["place_odds_mid"]
+    ped_selected["payout"] = ped_selected["hit"] * ped_selected["odds"] * args.stake
+    ped_selected["selection_key"] = ped_selected["horse_number"].astype(str)
+    pedigree_selections = ped_selected[
+        ["race_id", "fold", "bet_type", "strategy", "selection_key", "stake", "hit", "odds", "payout"]
+    ]
+
     strategy_races = {
         "win_stable": set(win_predictions["race_id"].unique()),
         "win_roi": set(win_predictions["race_id"].unique()),
@@ -455,11 +517,13 @@ def main() -> None:
         "place_latest": set(place_predictions["race_id"].unique()),
         "place_broad": set(place_predictions["race_id"].unique()),
         "place_stable": set(place_predictions["race_id"].unique()),
+        "pedigree_mid_20_stable": set(pedigree_consensus_df["race_id"].unique()),
         "wide_roi": set(exotic_predictions["race_id"].unique()),
         "wide_broad": set(exotic_predictions["race_id"].unique()),
         "trio_roi": set(exotic_predictions["race_id"].unique()),
         "trio_balanced": set(exotic_predictions["race_id"].unique()),
         "trio_hit_rate": set(exotic_predictions["race_id"].unique()),
+        "trio_high_roi": set(exotic_predictions["race_id"].unique()),
     }
     selections_by_strategy = {
         "win_stable": _single_selections(win_predictions, WIN_STABLE_RULE, "win", "win_stable", args.stake),
@@ -468,6 +532,7 @@ def main() -> None:
         "place_latest": _single_selections(place_predictions, PLACE_RULE, "place", "place_latest", args.stake),
         "place_broad": _single_selections(place_predictions, PLACE_BROAD_RULE, "place", "place_broad", args.stake),
         "place_stable": _single_selections(place_predictions, PLACE_STABLE_RULE, "place", "place_stable", args.stake),
+        "pedigree_mid_20_stable": pedigree_selections,
         "wide_roi": _wide_selections(args.exotic_predictions, args.db, args.engine, args.stake, WIDE_ROI_RULE, "wide_roi"),
         "wide_broad": _wide_selections(
             args.exotic_predictions,
@@ -495,6 +560,14 @@ def main() -> None:
             args.stake,
             TRIO_HIT_RATE_RULE,
             "trio_hit_rate",
+        ),
+        "trio_high_roi": _trio_selections(
+            args.exotic_predictions,
+            args.db,
+            args.engine,
+            args.stake,
+            TRIO_HIGH_ROI_RULE,
+            "trio_high_roi",
         ),
     }
 
