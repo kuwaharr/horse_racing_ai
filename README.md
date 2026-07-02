@@ -265,7 +265,7 @@ python scripts\evaluate_fixed_rule_from_predictions.py --engine fastparquet --pr
 python scripts\search_wide_rules_from_predictions.py --engine fastparquet --predictions "D:\horse_racing_ai\data\model\catboost_place_top3_predictions_affinity_lift_no_horse_id.parquet" --min-fold-return-mid 80 --output "D:\horse_racing_ai\data\model\wide_rule_search_results_affinity_lift_no_horse_id_minfold80.csv" --selections-output "D:\horse_racing_ai\data\model\wide_rule_selections_affinity_lift_no_horse_id_minfold80.csv"
 ```
 
-現時点のワイド探索では、`catboost_place_top3_predictions_affinity_lift_no_horse_id.parquet`を使った候補が最上位です。条件は、同一レース内のペア予測スコア上位5点、2頭の予測順位がともに3位以内、ワイドオッズ中間値`[10.0,100.0)`、開催場`1,2,3,7,10`除外です。walk-forward 4 foldで431レース、618点、39的中、的中率6.31%、購入率21.22%、ワイドオッズ中間値ベース回収率101.90%、最低fold回収率82.70%でした。
+現時点のワイド探索では、`catboost_place_top3_predictions_affinity_lift_no_horse_id.parquet`を使った候補が最上位です。条件は、同一レース内のペア予測スコア上位5点、2頭の予測順位がともに3位以内、ペア予測スコア`0.10`以上、2頭の予測確率の小さい方が`0.25`以上、ワイドオッズ中間値`[10.0,100.0)`、開催場`1,2,3,7,10`除外です。walk-forward 4 foldで379レース、520点、37的中、的中率7.12%、購入率18.66%、ワイドオッズ中間値ベース回収率114.36%、最低fold回収率100.63%でした。
 
 血統特徴量あり/なしを比較し、購入率20%前後の合議ルール候補を探す場合:
 

@@ -100,6 +100,7 @@ def _build_wide_pairs(predictions: pd.DataFrame, wide_odds: pd.DataFrame) -> pd.
     pairs = pairs.merge(wide_odds, on=["race_id", "horse_number_1", "horse_number_2"], how="inner")
     pairs["hit"] = ((pairs["target_top3_1"] == 1) & (pairs["target_top3_2"] == 1)).astype("int8")
     pairs["pair_score"] = pairs["pred_top3_1"] * pairs["pred_top3_2"]
+    pairs["ev_mid"] = pairs["pair_score"] * pairs["wide_odds_mid"]
     pairs["rank_max"] = pairs[["pred_rank_1", "pred_rank_2"]].max(axis=1)
     pairs["score_rank"] = (
         pairs.groupby("race_id")["pair_score"]
@@ -161,6 +162,9 @@ def _candidate_rules() -> list[dict[str, Any]]:
                                 {
                                     "score_topn": score_topn,
                                     "rank_max": rank_max,
+                                    "pair_score_min": 0.0,
+                                    "pair_min_pred_min": 0.0,
+                                    "ev_mid_min": 0.0,
                                     "odds_min": odds_min,
                                     "odds_max": odds_max,
                                     "surface_label": surface.label,
@@ -172,6 +176,27 @@ def _candidate_rules() -> list[dict[str, Any]]:
                                     "exclude_track_ids": track.exclude_ids,
                                 }
                             )
+    for pair_score_min in [0.07, 0.10]:
+        for pair_min_pred_min in [0.20, 0.22, 0.25]:
+            for ev_mid_min in [0.0, 1.0]:
+                rules.append(
+                    {
+                        "score_topn": 5,
+                        "rank_max": 3,
+                        "pair_score_min": pair_score_min,
+                        "pair_min_pred_min": pair_min_pred_min,
+                        "ev_mid_min": ev_mid_min,
+                        "odds_min": 10.0,
+                        "odds_max": 100.0,
+                        "surface_label": "all",
+                        "surface_id": None,
+                        "distance_label": "all",
+                        "distance_min": None,
+                        "distance_max": None,
+                        "track_label": "exclude_1_2_3_7_10",
+                        "exclude_track_ids": (1, 2, 3, 7, 10),
+                    }
+                )
     return rules
 
 
@@ -184,6 +209,9 @@ def _build_context(pairs: pd.DataFrame) -> dict[str, Any]:
         "fold": pairs["fold"].to_numpy(),
         "hit": pairs["hit"].to_numpy(),
         "wide_odds_mid": pairs["wide_odds_mid"].to_numpy(),
+        "pair_score": pairs["pair_score"].to_numpy(),
+        "pair_min_pred": pairs[["pred_top3_1", "pred_top3_2"]].min(axis=1).to_numpy(),
+        "ev_mid": (pairs["pair_score"] * pairs["wide_odds_mid"]).to_numpy(),
         "score_rank": pairs["score_rank"].to_numpy(),
         "rank_max": pairs["rank_max"].to_numpy(),
         "track_id": pairs["track_id"].to_numpy(),
@@ -201,6 +229,9 @@ def _mask_for_rule(context: dict[str, Any], rule: dict[str, Any]) -> np.ndarray:
     mask = (
         (context["score_rank"] <= rule["score_topn"])
         & (context["rank_max"] <= rule["rank_max"])
+        & (context["pair_score"] >= rule["pair_score_min"])
+        & (context["pair_min_pred"] >= rule["pair_min_pred_min"])
+        & (context["ev_mid"] >= rule["ev_mid_min"])
         & (context["wide_odds_mid"] >= rule["odds_min"])
         & (context["wide_odds_mid"] < rule["odds_max"])
     )
@@ -283,6 +314,7 @@ def _selection_columns(pairs: pd.DataFrame, mask: np.ndarray, stake: float) -> p
         "pred_rank_1",
         "pred_rank_2",
         "pair_score",
+        "ev_mid",
         "score_rank",
         "wide_odds_mid",
         "hit",
@@ -362,7 +394,7 @@ def main() -> None:
     print("Top rules")
     print(
         "return_mid  min_fold  buy_rate  races  selections  hits  hit_rate  "
-        "score_topn  rank_max  odds_range  surface  distance  track"
+        "score_topn  rank_max  score_min  min_pred  ev_min  odds_range  surface  distance  track"
     )
     for row in results_df.head(20).itertuples(index=False):
         print(
@@ -372,6 +404,7 @@ def main() -> None:
             f"{row.races:>5}  {row.selections:>10}  {row.hits:>4}  "
             f"{_format_pct(row.hit_rate_pct):>8}  "
             f"{row.score_topn:>10}  {row.rank_max:>8}  "
+            f"{row.pair_score_min:>9.2f}  {row.pair_min_pred_min:>8.2f}  {row.ev_mid_min:>6.1f}  "
             f"[{row.odds_min:.1f},{row.odds_max:.1f})  "
             f"{row.surface_label:<7}  {row.distance_label:<9}  {row.track_label}"
         )
