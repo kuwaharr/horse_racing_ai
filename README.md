@@ -262,7 +262,7 @@ python scripts\evaluate_fixed_rule_from_predictions.py --engine fastparquet --pr
 保存済みの複勝3着内予測からワイド候補を作り、購入レース割合20%前後のルールを探索する場合:
 
 ```powershell
-python scripts\search_wide_rules_from_predictions.py --engine fastparquet --predictions "D:\horse_racing_ai\data\model\catboost_place_top3_predictions_affinity_lift_no_horse_id.parquet" --min-fold-return-mid 80 --output "D:\horse_racing_ai\data\model\wide_rule_search_results_affinity_lift_no_horse_id_minfold80.csv"
+python scripts\search_wide_rules_from_predictions.py --engine fastparquet --predictions "D:\horse_racing_ai\data\model\catboost_place_top3_predictions_affinity_lift_no_horse_id.parquet" --min-fold-return-mid 80 --output "D:\horse_racing_ai\data\model\wide_rule_search_results_affinity_lift_no_horse_id_minfold80.csv" --selections-output "D:\horse_racing_ai\data\model\wide_rule_selections_affinity_lift_no_horse_id_minfold80.csv"
 ```
 
 現時点のワイド探索では、`catboost_place_top3_predictions_affinity_lift_no_horse_id.parquet`を使った候補が最上位です。条件は、同一レース内のペア予測スコア上位5点、2頭の予測順位がともに3位以内、ワイドオッズ中間値`[10.0,100.0)`、開催場`1,2,3,7,10`除外です。walk-forward 4 foldで431レース、618点、39的中、的中率6.31%、購入率21.22%、ワイドオッズ中間値ベース回収率101.90%、最低fold回収率82.70%でした。

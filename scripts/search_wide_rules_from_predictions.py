@@ -264,10 +264,34 @@ def _evaluate_rule(
     result["min_fold_return_mid_pct"] = min(fold_returns)
     result["max_fold_return_mid_pct"] = max(fold_returns)
     result["min_fold_selections"] = min(fold_selections)
-    result["exclude_track_ids"] = (
-        "" if result["exclude_track_ids"] is None else ",".join(str(v) for v in result["exclude_track_ids"])
-    )
     return result
+
+
+def _selection_columns(pairs: pd.DataFrame, mask: np.ndarray, stake: float) -> pd.DataFrame:
+    selections = pairs.loc[mask].copy()
+    selections["wide_payout_mid"] = selections["hit"] * selections["wide_odds_mid"] * stake
+    columns = [
+        "race_id",
+        "date",
+        "track_id",
+        "surface_id",
+        "distance",
+        "horse_number_1",
+        "horse_number_2",
+        "pred_top3_1",
+        "pred_top3_2",
+        "pred_rank_1",
+        "pred_rank_2",
+        "pair_score",
+        "score_rank",
+        "wide_odds_mid",
+        "hit",
+        "wide_payout_mid",
+        "fold",
+    ]
+    return selections[[col for col in columns if col in selections.columns]].sort_values(
+        ["race_id", "score_rank", "horse_number_1", "horse_number_2"]
+    )
 
 
 def main() -> None:
@@ -275,6 +299,7 @@ def main() -> None:
     parser.add_argument("--predictions", type=Path, default=DEFAULT_PREDICTIONS)
     parser.add_argument("--db", type=Path, default=DB_PATH)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument("--selections-output", type=Path, default=None)
     parser.add_argument("--engine", choices=["auto", "pyarrow", "fastparquet"], default="auto")
     parser.add_argument("--min-buy-rate", type=float, default=18.0)
     parser.add_argument("--max-buy-rate", type=float, default=22.0)
@@ -310,8 +335,18 @@ def main() -> None:
             ["return_mid_pct", "min_fold_return_mid_pct", "buy_rate_pct"],
             ascending=[False, False, True],
         )
+        results_df["exclude_track_ids"] = results_df["exclude_track_ids"].map(
+            lambda value: "" if value is None else ",".join(str(v) for v in value)
+        )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     results_df.to_csv(args.output, index=False, encoding="utf-8-sig")
+
+    if args.selections_output is not None and results:
+        best_rule = max(results, key=lambda row: (row["return_mid_pct"], row["min_fold_return_mid_pct"]))
+        best_mask = _mask_for_rule(context, best_rule)
+        selections = _selection_columns(pairs, best_mask, args.stake)
+        args.selections_output.parent.mkdir(parents=True, exist_ok=True)
+        selections.to_csv(args.selections_output, index=False, encoding="utf-8-sig")
 
     print(f"Predictions: {args.predictions}")
     print(f"DB: {args.db}")
@@ -319,6 +354,8 @@ def main() -> None:
     print(f"Prediction races: {context['total_races']:,}")
     print(f"Results: {len(results_df):,}")
     print(f"Output: {args.output}")
+    if args.selections_output is not None:
+        print(f"Selections output: {args.selections_output}")
     if results_df.empty:
         return
     print("")
