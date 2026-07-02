@@ -275,6 +275,16 @@ python scripts\search_trio_rules_from_predictions.py --engine fastparquet --pred
 
 現時点の3連複探索では、`catboost_place_top3_predictions_affinity_lift_no_horse_id.parquet`を使った候補が上位です。条件は、同一レース内の3頭組予測スコア上位10点、3頭の予測順位がすべて6位以内、3連複オッズ`[100.0,1000.0)`、芝、開催場`1,2,3,7,10`除外です。walk-forward 4 foldで385レース、939点、9的中、的中率0.96%、購入率18.96%、3連複回収率142.94%、最低fold回収率93.92%でした。最新のデフォルト複勝予測`catboost_place_top3_predictions.parquet`では、最低fold回収率80%以上のトップが606レース、1,217点、15的中、購入率21.58%、回収率115.82%でした。
 
+単勝・複勝・ワイド・3連複を同じ100円単位で組み合わせたポートフォリオとして評価する場合:
+
+```powershell
+python scripts\evaluate_bet_portfolios.py --engine fastparquet --output "D:\horse_racing_ai\data\model\bet_portfolio_results.csv"
+```
+
+現時点では、券種ごとに広狭を変えた`best_mixed_width`が上位です。単勝は安定狭め、複勝は少し広め、ワイドと3連複は高ROI狭めで組み合わせます。結果は1,294レース、2,807点、526的中、購入率46.08%、的中率18.74%、ROI121.60%、最低fold ROI105.71%でした。的中率寄りの3連複を使う`balanced_all`は、1,229レース、3,183点、598的中、購入率43.77%、的中率18.79%、ROI113.79%、最低fold ROI102.23%でした。買い点数を増やす`volume_plus_roi`は購入率45.83%、3,942点まで増えますが、ROIは109.03%、最低fold ROI98.63%まで下がります。
+
+購入率を30%前後まで落とす場合は、全券種ではなく2券種中心が上位です。複勝広めと3連複高ROIを組み合わせる`place_trio_roi`は、845レース、1,575点、213的中、購入率30.09%、的中率13.52%、ROI139.05%、最低fold ROI115.54%でした。ワイド高ROIと3連複高ROIだけの`exotic_roi`は、622レース、1,459点、46的中、購入率30.63%、的中率3.15%、ROI132.75%、最低fold ROI96.28%でした。複勝広めとワイド高ROIの`place_wide`は、839レース、1,156点、241的中、購入率29.88%、的中率20.85%、ROI124.78%、最低fold ROI102.61%でした。
+
 血統特徴量あり/なしを比較し、購入率20%前後の合議ルール候補を探す場合:
 
 ```powershell
